@@ -1,10 +1,8 @@
 {
-  "name": "babel-plugin",
+  "name": "babel-plugin-transform-observable",
   "version": "1.0.0",
   "description": "",
   "main": "./lib/index.js",
-  "scripts": {
-  },
   "author": "Domenic Di Nenno",
   "license": "ISC"
 }

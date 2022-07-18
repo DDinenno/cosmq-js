@@ -6,15 +6,19 @@ exports.default = function (babel) {
   const { types: t } = babel;
   const observableVariableDeclarations = [];
 
-  function isWrappedInComputedFunction(path) {
-    if (path.parent.type === "ArrowFunctionExpression") {
+  function isWrappedInComputedFunc(path) {
+    if (!path) return;
+    if (path.type === "CallExpression") {
       if (
-        path.parentPath.parent.type === "CallExpression" &&
-        path.parentPath.parent.callee.object.name === "PlaceholderJs" &&
-        path.parentPath.parent.callee.property.name === "compute"
+        path.node.callee.object.name === "PlaceholderJs" &&
+        path.node.callee.property.name === "compute"
       )
         return true;
     }
+
+    if (path.parent) return isWrappedInComputedFunc(path.parentPath);
+
+    return false;
   }
 
   function isWrappedInPlaceholderJsMethod(path) {
@@ -27,27 +31,38 @@ exports.default = function (babel) {
     return isWrappedInPlaceholderJsMethod(path.parentPath);
   }
 
-  function isPropValue(path) {
+  function isObservable(node) {
     return (
-      path.parent.type === "JSXExpressionContainer" &&
-      path.parentPath.parent.type === "JSXAttribute"
+      node.type === "Identifier" &&
+      observableVariableDeclarations.includes(node.name)
     );
   }
 
-  function arrayIncludesObservable(expression) {
-    return expression.elements.some(
-      (e) =>
-        e.type === "Identifier" &&
-        observableVariableDeclarations.includes(e.name)
-    );
-  }
+  function templateLiteralIncludesObservable(node) {
+    const found = [];
+    const alreadyExists = (n) => found.find((f) => f.name === n.name);
+    const recurse = (n) =>
+      templateLiteralIncludesObservable(n).filter(
+        (observable) => !alreadyExists(observable)
+      );
 
-  function templateLiteralIncludesObservable(exp) {
-    return exp.expressions.find(
-      (e) =>
-        e.type === "Identifier" &&
-        observableVariableDeclarations.includes(e.name)
-    );
+    if (node.type === "MemberExpression") {
+      if (
+        isObservable(node.object) &&
+        !alreadyExists(node.object) &&
+        node.property.name !== "value"
+      ) {
+        found.push(node.object);
+      }
+    } else if (isObservable(node)) {
+      if (!alreadyExists(node)) found.push(node);
+    } else if (node.expressions) {
+      node.expressions.forEach((n) => {
+        found.push(...recurse(n));
+      });
+    }
+
+    return found;
   }
 
   return {
@@ -58,17 +73,24 @@ exports.default = function (babel) {
           const init = declaration.init;
           if (init) {
             if (init.type === "NewExpression") {
-              if (init.callee.name === "Observable") {
+              if (["Observable", "Formula"].includes(init.callee.name)) {
                 observableVariableDeclarations.push(declaration.id.name);
               } else if (init.callee.type === "MemberExpression") {
-                if (init.callee.property.name === "Observable") {
+                if (
+                  ["Observable", "Formula"].includes(init.callee.property.name)
+                ) {
                   observableVariableDeclarations.push(declaration.id.name);
                 }
               }
-            }
-
-            if (init.type === "Identifier") {
-            
+            } else if (init.type === "CallExpression") {
+              if (
+                init.callee.object &&
+                init.callee.object.name === "PlaceholderJs" &&
+                init.callee.property &&
+                init.callee.property.name === "compute"
+              )
+                observableVariableDeclarations.push(declaration.id.name);
+            } else if (init.type === "Identifier") {
               if (observableVariableDeclarations.includes(init.name)) {
                 observableVariableDeclarations.push(declaration.id.name);
               }
@@ -76,76 +98,23 @@ exports.default = function (babel) {
           }
         });
       },
-      JSXExpressionContainer(path) {
-        if (path.parent.type === "JSXAttribute") {
-          const exp = path.node.expression;
-
-          if (exp.type === "ArrayExpression") {
-            if (arrayIncludesObservable(exp)) {
-              const callee = t.memberExpression(
-                t.identifier("PlaceholderJs"),
-                t.identifier("compute")
-              );
-              const arrowFunc = t.ArrowFunctionExpression(
-                [],
-                t.arrayExpression(exp.elements)
-              );
-              const callExpression = t.callExpression(callee, [arrowFunc]);
-              // path.replaceWith(t.JSXExpressionContainer(callExpression), path.node);
-            }
-          }
-
-          if (exp.type === "TemplateLiteral") {
-            if (templateLiteralIncludesObservable(exp)) {
-              const callee = t.memberExpression(
-                t.identifier("PlaceholderJs"),
-                t.identifier("compute")
-              );
-              const arrowFunc = t.ArrowFunctionExpression([], exp);
-              const callExpression = t.callExpression(callee, [arrowFunc]);
-              //  path.replaceWith(t.JSXExpressionContainer(callExpression), path.node);
-            }
-          }
-        }
-      },
       TemplateLiteral(path) {
-        if (isWrappedInComputedFunction(path)) return;
+        if (isWrappedInComputedFunc(path)) return;
+        const observables = templateLiteralIncludesObservable(path.node);
 
-        
-        if (templateLiteralIncludesObservable(path.node)) {
+        if (observables.length) {
           const callee = t.memberExpression(
             t.identifier("PlaceholderJs"),
             t.identifier("compute")
           );
+
           const arrowFunc = t.ArrowFunctionExpression([], path.node);
-          const callExpression = t.callExpression(callee, [arrowFunc]);
+          const depArray = t.arrayExpression(observables);
+          const callExpression = t.callExpression(callee, [
+            arrowFunc,
+            depArray,
+          ]);
           path.replaceWith(callExpression, path.node);
-        }
-      },
-      ArrayExpression(path) {
-        if (isWrappedInComputedFunction(path)) return;
-
-        const observablesFound = [];
-
-        path.node.elements.forEach((element) => {
-          if (element.type === "Identifier") {
-            if (observableVariableDeclarations.includes(element.name)) {
-              observablesFound.push(element);
-            }
-          }
-        });
-
-        if (observablesFound.length) {
-          const callee = t.memberExpression(
-            t.identifier("PlaceholderJs"),
-            t.identifier("compute")
-          );
-          const arrowFunc = t.ArrowFunctionExpression(
-            [],
-            t.arrayExpression(path.node.elements)
-          );
-          const callExpression = t.callExpression(callee, [arrowFunc]);
-          //path.replaceWith(callExpression, path.node);
         }
       },
       Identifier(path) {
@@ -156,12 +125,11 @@ exports.default = function (babel) {
           "LogicalExpression",
           "ArrayExpression",
           "TemplateLiteral",
+          "CallExpression",
         ];
-        //  const isExpression = path.parent.type.match(/Expression$/);
-        // const excludedExpressions = ["MemberExpression", "CallExpression", "ArrayExpression"];
 
-        if (expressions.includes(path.parent.type)) {
-          if (observableVariableDeclarations.includes(path.node.name)) {
+        if (observableVariableDeclarations.includes(path.node.name)) {
+          if (expressions.includes(path.parent.type)) {
             if (path.parent.type === "MemberExpression") {
               if (["set", "value"].includes(path.parent.property.name)) return;
             }
