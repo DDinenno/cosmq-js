@@ -1,5 +1,5 @@
 import core from "../core";
-import batchInvoke from "../utils/batchInvoke";
+// import batchInvoke from "../utils/batchInvoke";
 
 class Observable {
   #symbol;
@@ -21,12 +21,12 @@ class Observable {
       return;
     }
 
-    batchInvoke(this, () => {
-      if (this.value !== newValue) {
-        this.value = newValue;
-        this.listeners.forEach((fn) => fn(newValue, this.value));
-      }
-    });
+    // batchInvoke(this, () => {
+    if (this.value !== newValue) {
+      this.value = newValue;
+      this.listeners.forEach((fn) => fn(newValue, this.value));
+    }
+    // });
   }
 
   listen(listener) {
