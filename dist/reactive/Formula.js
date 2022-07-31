@@ -8,7 +8,6 @@ class Formula extends Observable {
   constructor(generate, deps = []) {
     super();
 
-    this.batch = false;
     this.values = this.dependencies.map((d) =>
       d instanceof Observable ? d.value : d
     );
@@ -21,11 +20,17 @@ class Formula extends Observable {
         dep.listen(() => {
           this.values = [...this.values];
           this.values[index] = dep.value;
-          console.log("generated",generate(...this.values))
           this.set(generate(...this.values));
         });
       } else this.dependencies[index] = dep;
     });
+  }
+
+  set(newValue) {
+    if (this.value !== newValue) {
+      this.value = newValue;
+      this.listeners.forEach((fn) => fn(newValue, this.value));
+    }
   }
 }
 

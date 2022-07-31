@@ -1,44 +1,32 @@
+import core from "../core";
+import batchInvoke from "../utils/batchInvoke";
+
 class Observable {
+  #symbol;
+
   value = null;
 
   listeners = [];
 
-  batch = true;
-
-  static batchedCalls = {};
-
-  static batchTimeout = null;
-
   constructor(initialValue) {
     this.value = initialValue;
+    this.#symbol = core.registerObservable(this);
   }
 
-  static batchInvoke(callback) {
-    Observable.batchedCalls[this] = callback;
+  set(newValue, symbol) {
+    if (symbol !== this.#symbol) {
+      console.error(
+        "Observable.set cannot be called outside the component it was initialized in!"
+      );
+      return;
+    }
 
-    if (Observable.batchTimeout === null)
-      Observable.batchTimeout = setTimeout(() => {
-        Object.values(Observable.batchedCalls).forEach((callback) => callback());
-        Observable.batchTimeout = null;
-      }, 200);
-  }
-
-  set(newValue) {
-    if (this.batch) {
-      const batch = Observable.batchInvoke.bind(this);
-
-      batch(() => {
-        if (this.value !== newValue) {
-          this.value = newValue;
-          this.listeners.forEach((fn) => fn(newValue, this.value));
-        }
-      });
-    } else {
+    batchInvoke(this, () => {
       if (this.value !== newValue) {
         this.value = newValue;
         this.listeners.forEach((fn) => fn(newValue, this.value));
       }
-    }
+    });
   }
 
   listen(listener) {
