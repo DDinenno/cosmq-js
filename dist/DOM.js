@@ -1,25 +1,35 @@
-import registerComponent from "./registerComponent";
 import Observable from "./reactive/Observable";
 import Conditional from "./reactive/Conditional";
 
-function mountNode(parent, newNode, oldNode = null) {
+// https://stackoverflow.com/questions/5882768/how-to-append-a-childnode-to-a-specific-position
+Element.prototype.insertChildAtIndex = function (child, index) {
+  if (!index) index = 0;
+  if (index >= this.children.length) {
+    this.appendChild(child);
+  } else {
+    this.insertBefore(child, this.children[index]);
+  }
+};
+
+function mountNode(parent, newNode, oldNode = null, index) {
   if (!parent) {
-    console.warn("no parent");
-    return;
+    throw new Error("No parent provided!");
   }
 
   if (!newNode) {
-    console.warn("attempting to mount node that's null");
-    return;
+    throw new Error("attempting to mount node that's null");
   }
 
-  if (!oldNode) parent.appendChild(newNode);
-  else parent.replaceChild(newNode, oldNode);
+  if (!oldNode) {
+    parent.appendChild(newNode);
+  } else parent.replaceChild(newNode, oldNode);
 }
 
 function applyProperties(node, properties, onUnmount) {
   Object.entries(properties).forEach(([property, value]) => {
-    if (property === "style") {
+    if (property === "key") {
+      node.dataset.key = value;
+    } else if (property === "style") {
       applyProperties(node.style, value, onUnmount);
     } else {
       if (value instanceof Observable) {
@@ -43,7 +53,6 @@ function applyProperties(node, properties, onUnmount) {
         };
         observable.listen(listenerFN);
         onUnmount(() => observable.mute(listenerFN));
-        // onDeleteFns.push(() => observable.mute(listenerFN))
       } else if (property.match(/^handle:/)) {
         const eventName = property.replace(/^handle:/, "");
         node.addEventListener(eventName, value);
@@ -127,18 +136,23 @@ function handleObservableArray(observable, parentNode, onUnmount) {
         );
         mountNode(parentNode, context.domRef);
       }
+    }
 
+    const nodes = [...context.domRef.childNodes];
+    const prevAmount = context.domRef.childNodes.length;
+
+    if (children.length === 0) {
+      for (let i = 0; i < nodes.length; i++) {
+        context.domRef.removeChild(nodes[0]);
+      }
+    } else {
       children.forEach((child, index) => {
-        if (context.domRef.childNodes[index] === child) return;
-        mountNode(context.domRef, child, context.domRef.childNodes[index]);
+        if (nodes[index] === child) return;
+        mountNode(context.domRef, child, nodes[index]);
       });
 
-      if (context.domRef.childNodes.length > children.length) {
-        for (
-          let i = children.length;
-          i < context.domRef.childNodes.length;
-          i++
-        ) {
+      if (children.length < nodes.length) {
+        for (let i = children.length; i < nodes.length; i++) {
           context.domRef.childNodes[i].remove();
         }
       }
@@ -189,8 +203,7 @@ function renderElement(tree = {}, onUnmount) {
             });
           }
         } else if (child.isComponent) {
-          const component = child.render();
-          mountNode(node, component);
+          mountNode(node, child.ref);
         } else if (child instanceof Conditional) {
           const context = {};
 
@@ -226,7 +239,7 @@ function renderElement(tree = {}, onUnmount) {
 function renderDOM(component, targetId = "root") {
   const target = document.getElementById(targetId);
   if (!target) throw new Error("target not found");
-  mountNode(target, registerComponent(component, {}).render());
+  mountNode(target, component.ref);
 }
 
 export { mountNode, applyProperties, renderElement, renderDOM };
