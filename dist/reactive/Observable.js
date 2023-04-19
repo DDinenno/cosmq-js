@@ -24,7 +24,7 @@ class Observable {
     // batchInvoke(this, () => {
     if (this.value !== newValue) {
       this.value = newValue;
-      this.listeners.forEach((fn) => fn(newValue, this.value));
+      this.listeners.forEach((fn) => fn(newValue));
     }
     // });
   }
