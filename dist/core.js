@@ -66,26 +66,7 @@ class Core {
       unmountFns.forEach((fn) => fn());
       unmountFns = [];
     };
-
-    if (renderConfig instanceof Conditional) {
-      renderConfig.onChange((newConfig) => {
-        const parentNode = currentDomRef?.parentNode;
-
-        triggerOnUnMountFns();
-        const newDomRef = renderElement(newConfig, onUnmount);
-
-        mountNode(parentNode, newDomRef, currentDomRef);
-        console.log("changed", name);
-        currentDomRef = newDomRef;
-      });
-    }
-
-    const config =
-      renderConfig instanceof Conditional
-        ? renderConfig.evaluate()
-        : renderConfig;
-
-    const domRef = renderElement(config, onUnmount);
+    const domRef = renderElement(renderConfig, onUnmount);
     componentNode.ref = domRef;
     domRef.classList.add(`component-${id}`);
 
