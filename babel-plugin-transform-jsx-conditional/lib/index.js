@@ -123,7 +123,7 @@ exports.default = function (babel) {
         expressions.push(
           t.objectExpression([
             t.objectProperty(
-              t.stringLiteral("condition"),
+              t.stringLiteral("__condition__"),
               t.arrowFunctionExpression([], expression.condition)
             ),
             t.objectProperty(
@@ -211,5 +211,3 @@ exports.default = function (babel) {
     },
   };
 };
-
-module.exports = exports["default"];

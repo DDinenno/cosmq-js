@@ -12,17 +12,19 @@ class Conditional {
   config = null;
 
   onChange(cb) {
-    this.deps.forEach((dep) =>
-      dep.listen(() => {
-        // re-evalute
-        const previousConfig = this.config;
-        const newConfig = this.evaluate();
+    this.deps.forEach((dep) => {
+      if (dep instanceof Observable) {
+        dep.listen(() => {
+          // re-evalute
+          const previousConfig = this.config;
+          const newConfig = this.evaluate();
 
-        if (newConfig !== previousConfig) {
-          cb(newConfig, previousConfig);
-        }
-      })
-    );
+          if (newConfig !== previousConfig) {
+            cb(newConfig, previousConfig);
+          }
+        });
+      }
+    });
   }
 
   constructor(deps, conditions) {
@@ -31,12 +33,9 @@ class Conditional {
   }
 
   evaluate() {
-    const matchedCondition = this.conditions.findIndex(({ condition }) => {
-      const params = this.deps.map((dep) =>
-        dep instanceof Observable ? dep.value : dep
-      );
-      return !!condition(...params);
-    });
+    const matchedCondition = this.conditions.findIndex(
+      ({ __condition__: condition }) => !!condition(...this.deps)
+    );
 
     if (matchedCondition !== -1 && matchedCondition !== this.prevCondition) {
       this.prevCondition = matchedCondition;
