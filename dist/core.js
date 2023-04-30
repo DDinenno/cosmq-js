@@ -23,6 +23,10 @@ class Core {
     return this.currentId;
   }
 
+  getPropValue(prop) {
+    return prop instanceof Observable ? prop.value : prop;
+  }
+
   getComponentContext() {
     return this.#registeringComponents[this.#registeringComponents.length - 1];
   }

@@ -31,6 +31,8 @@ function applyProperties(node, properties, onUnmount) {
       node.dataset.key = value;
     } else if (property === "style") {
       applyProperties(node.style, value, onUnmount);
+    } else if (property === "innerHTML") {
+      node.append(value);
     } else {
       if (value instanceof Observable) {
         const observable = value;
@@ -178,58 +180,62 @@ function renderElement(tree = {}, onUnmount) {
   // append children
   if (childrenArr && childrenArr.length)
     childrenArr.forEach((child, childIndex) => {
-      if (type === "inner") {
-        if (typeof child === "string") {
-          applyProperties(node, { innerHTML: child }, onUnmount);
-        } else if (child instanceof Observable) {
-          applyProperties(node, { innerHTML: child }, onUnmount);
-        }
-      } else {
-        if (typeof child === "string") {
-          applyProperties(node, { innerHTML: child }, onUnmount);
-        } else if (child instanceof Observable) {
-          if (Array.isArray(child.value)) {
-            handleObservableArray(child, node, onUnmount);
-          } else {
-            const unmountHandler = (fn) => {
-              onUnmount(child.mute);
-              onUnmount(fn);
-            };
+      if (typeof child === "string") {
+        applyProperties(node, { innerHTML: child }, onUnmount);
+      } else if (child instanceof Observable) {
+        if (Array.isArray(child.value)) {
+          handleObservableArray(child, node, onUnmount);
+        } else {
+          const unmountHandler = (fn) => {
+            onUnmount(child.mute);
+            onUnmount(fn);
+          };
 
-            applyProperties(node, { innerHTML: child.value }, unmountHandler);
+          if (node.localName === "input") {
+            applyProperties(node, { value: child.value }, unmountHandler);
 
             child.listen(() => {
-              applyProperties(node, { innerHTML: child.value }, unmountHandler);
+              applyProperties(node, { value: child.value }, unmountHandler);
+            });
+          } else {
+            let currentRef = new Text(child.value);
+
+            mountNode(node, currentRef);
+
+            child.listen(() => {
+              let newRef = new Text(child.value);
+              mountNode(node, newRef, currentRef);
+              currentRef = newRef;
             });
           }
-        } else if (child.isComponent) {
-          mountNode(node, child.ref);
-        } else if (child instanceof Conditional) {
-          const context = {};
-
-          context.config = child.evaluate();
-          context.domRef = renderElement(context.config, onUnmount);
-
-          child.onChange((newConfig) => {
-            const { domRef: currentDomRef, config: currentConfig } =
-              context || {};
-
-            const parent = currentDomRef?.parentNode;
-
-            if (newConfig !== currentConfig) {
-              const newDomRef = renderElement(newConfig, onUnmount);
-
-              context.config = newConfig;
-              context.domRef = newDomRef;
-
-              mountNode(parent, newDomRef, currentDomRef);
-            }
-          });
-
-          mountNode(node, context.domRef);
-        } else {
-          mountNode(node, renderElement(child, onUnmount));
         }
+      } else if (child.isComponent) {
+        mountNode(node, child.ref);
+      } else if (child instanceof Conditional) {
+        const context = {};
+
+        context.config = child.evaluate();
+        context.domRef = renderElement(context.config, onUnmount);
+
+        child.onChange((newConfig) => {
+          const { domRef: currentDomRef, config: currentConfig } =
+            context || {};
+
+          const parent = currentDomRef?.parentNode;
+
+          if (newConfig !== currentConfig) {
+            const newDomRef = renderElement(newConfig, onUnmount);
+
+            context.config = newConfig;
+            context.domRef = newDomRef;
+
+            mountNode(parent, newDomRef, currentDomRef);
+          }
+        });
+
+        mountNode(node, context.domRef);
+      } else {
+        mountNode(node, renderElement(child, onUnmount));
       }
     });
 

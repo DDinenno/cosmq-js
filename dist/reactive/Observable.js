@@ -2,25 +2,17 @@ import core from "../core";
 // import batchInvoke from "../utils/batchInvoke";
 
 class Observable {
-  #symbol;
-
   value = null;
 
   listeners = [];
 
   constructor(initialValue) {
     this.value = initialValue;
-    this.#symbol = core.registerObservable(this);
+    core.registerObservable(this);
   }
 
-  set(newValue, symbol) {
-    if (symbol !== this.#symbol) {
-      console.error(
-        "Observable.set cannot be called outside the component it was initialized in!"
-      );
-      return;
-    }
-
+  set(newValue) {
+    // TODO: fix batch invoke
     // batchInvoke(this, () => {
     if (this.value !== newValue) {
       this.value = newValue;

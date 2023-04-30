@@ -12,6 +12,7 @@ const conditional = (deps, conditions) => new Conditional(deps, conditions);
 const registerComponent = core.registerComponent.bind(core);
 const getComponentContext = core.getComponentContext.bind(core);
 const evalObservable = core.evalObservable.bind(core);
+const getPropValue = core.getPropValue.bind(core);
 
 const PlaceholderJs = {
   observe,
@@ -21,6 +22,7 @@ const PlaceholderJs = {
   registerComponent,
   getComponentContext,
   evalObservable,
+  getPropValue,
   mountNode,
   applyProperties,
   renderElement,
@@ -36,6 +38,7 @@ export {
   evalObservable,
   registerComponent,
   getComponentContext,
+  getPropValue,
   mountNode,
   applyProperties,
   renderElement,
