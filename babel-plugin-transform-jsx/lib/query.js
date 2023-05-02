@@ -1,9 +1,4 @@
-const {
-  matchParentRecursively,
-  placeholderJsMethodMatchesProperty,
-  isComponentFunction,
-  isInBlockStatement,
-} = require("./assertions");
+const assert = require("./assertions");
 
 function getRootBoundNode(path, name) {
   let binding = path.scope.getBinding(name);
@@ -24,8 +19,8 @@ function getObservableBinding(path, name) {
 
   if (
     ((init.type === "CallExpression" || init.type === "MemberExpression") &&
-      placeholderJsMethodMatchesProperty(init.callee, "compute")) ||
-    placeholderJsMethodMatchesProperty(init.callee, "observe")
+      assert.isCalleeModuleMethod(init.callee, "compute")) ||
+    assert.isCalleeModuleMethod(init.callee, "observe")
   )
     return binding;
 }
@@ -71,8 +66,11 @@ function getFunctionParams(path) {
 function findComponentRoot(path) {
   let componentPath;
 
-  matchParentRecursively(path, (parentPath) => {
-    if (isComponentFunction(parentPath) && isInBlockStatement(path)) {
+  assert.matchParentRecursively(path, (parentPath) => {
+    if (
+      assert.isComponentFunction(parentPath) &&
+      assert.isInBlockStatement(path)
+    ) {
       componentPath = parentPath;
       return true;
     }

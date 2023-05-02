@@ -1,3 +1,5 @@
+const { findNearestAncestor } = require("./utils");
+
 function matchParentRecursively(path, matcher) {
   if (!path) return false;
   if (matcher(path)) return true;
@@ -8,7 +10,7 @@ function isInTemplateLiteral(path) {
   return matchParentRecursively(path, (p) => p.node.type === "TemplateLiteral");
 }
 
-function placeholderJsMethodMatchesProperty(node, property) {
+function isCalleeModuleMethod(node, property) {
   if (!node) return;
   if (node.type === "MemberExpression") {
     if (node.object.name === "PlaceholderJs") {
@@ -16,13 +18,60 @@ function placeholderJsMethodMatchesProperty(node, property) {
     }
   }
   if (node.type === "CallExpression")
-    return placeholderJsMethodMatchesProperty(node.callee, property);
+    return isCalleeModuleMethod(node.callee, property);
   return false;
+}
+
+function isModuleMethod(path, name) {
+  if (path.node.type === "CallExpression") {
+    const callee = path.node.callee;
+
+    if (callee.type === "Identifier") {
+      const binding = path.scope.getBinding(callee.name);
+      if (!binding && callee.name === name) return true;
+
+      if (binding && binding.kind === "module") {
+        // checks to see if matches with a named import, regardless of it being mapped to a new identifier
+        return (
+          binding.path.type === "ImportSpecifier" &&
+          binding.path.parentPath.node.source.value === "reactive-frame" &&
+          binding.path.node.imported.name === name &&
+          binding.path.node.local.name === callee.name
+        );
+      }
+    }
+
+    if (callee.type === "MemberExpression") {
+      if (callee.type === "MemberExpression") {
+        if (callee.object.name === "PlaceholderJs") {
+          return callee.property.name === name;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function isIdentifierInDeps(path) {
+  return matchParentRecursively(path, (p) => {
+    if (p.type === "ArrayExpression") {
+      if (isModuleMethod(p.parentPath, "conditional")) {
+        if (p.parentPath.node.arguments[0] === p.node) return true;
+        return false;
+      }
+
+      return (
+        isModuleMethod(p.parentPath, "compute") ||
+        isModuleMethod(p.parentPath, "effect")
+      );
+    }
+  });
 }
 
 function isWrappedInPropertyValueGetter(path) {
   return matchParentRecursively(path, (parentPath) =>
-    placeholderJsMethodMatchesProperty(parentPath.node, "getPropValue")
+    isCalleeModuleMethod(parentPath.node, "getPropValue")
   );
 }
 
@@ -30,8 +79,8 @@ function isInComputedDeps(path) {
   if (path.parent == null) return false;
   if (path.type === "ArrayExpression") {
     if (
-      placeholderJsMethodMatchesProperty(path.parent.callee, "compute") ||
-      placeholderJsMethodMatchesProperty(path.parent.callee, "conditional")
+      isCalleeModuleMethod(path.parent.callee, "compute") ||
+      isCalleeModuleMethod(path.parent.callee, "conditional")
     )
       return true;
   }
@@ -50,17 +99,8 @@ function bodyContainsContext(path) {
   });
 }
 
-function isWrappedInComputedShorthand(path) {
-  return matchParentRecursively(
-    path,
-    (p) => p.node.callee && p.node.callee.name === "compute"
-  );
-}
-
 function isWrappedInComputedFunc(path) {
-  return matchParentRecursively(path, (p) =>
-    placeholderJsMethodMatchesProperty(p.node.callee, "compute")
-  );
+  return matchParentRecursively(path, (p) => isModuleMethod(p, "compute"));
 }
 
 function isInConditionalCondition(path) {
@@ -74,18 +114,25 @@ function isWrappedInConditionalStatement(path) {
   return matchParentRecursively(
     path,
     (p) =>
-      placeholderJsMethodMatchesProperty(p.node.callee, "conditional") &&
+      isCalleeModuleMethod(p.node.callee, "conditional") &&
       isInConditionalCondition(path)
   );
 }
 
 function isInComponentProps(path) {
   return matchParentRecursively(path, (parentPath) => {
-    return placeholderJsMethodMatchesProperty(
-      parentPath.node.callee,
-      "registerComponent"
-    );
+    return isCalleeModuleMethod(parentPath.node.callee, "registerComponent");
   });
+}
+
+function isFunction(path) {
+  return (
+    path.node.type === "FunctionDeclaration" ||
+    (path.node.type === "VariableDeclaration" &&
+      path.node.declarations[0] &&
+      path.node.declarations[0].init &&
+      path.node.declarations[0].init.type === "ArrowFunctionExpression")
+  );
 }
 
 function isComponentIdentifier(node) {
@@ -105,6 +152,13 @@ function isComponentFunction(path) {
   }
 
   return false;
+}
+
+/** is in a function inside of a component */
+function isInnerFunction(path) {
+  const nearestFunction = findNearestAncestor(path, isFunction);
+  if (!nearestFunction) return false;
+  return !isComponentFunction(nearestFunction);
 }
 
 function isInComponentBody(path) {
@@ -137,20 +191,47 @@ function isWrappedInSetter(path) {
   );
 }
 
+function isIdentifierInJSXAttribute(path) {
+  if (["JSXExpressionContainer", "JSXAttribute"].includes(path.parent.type)) {
+    return true;
+  }
+  false;
+}
+
+function isObservableAccessed(path) {
+  if (path.parent.type === "MemberExpression") {
+    if (path.parent.property.name === "value") return true;
+  }
+  return false;
+}
+
+function isObservableAssignment(path) {
+  if (path.parent.type === "MemberExpression") {
+    if (path.parent.property.name === "set") return true;
+  }
+  return false;
+}
+
 module.exports = {
   isWrappedInConditionalStatement,
   isWrappedInComputedFunc,
-  isWrappedInComputedShorthand,
   isWrappedInPropertyValueGetter,
   bodyContainsContext,
   isInComputedDeps,
-  placeholderJsMethodMatchesProperty,
+  isCalleeModuleMethod,
   isInTemplateLiteral,
   matchParentRecursively,
   isInComponentProps,
   isInComponentBody,
+  isFunction,
   isComponentFunction,
   isComponentIdentifier,
   isInBlockStatement,
   isWrappedInSetter,
+  isModuleMethod,
+  isIdentifierInDeps,
+  isInnerFunction,
+  isIdentifierInJSXAttribute,
+  isObservableAccessed,
+  isObservableAssignment,
 };
