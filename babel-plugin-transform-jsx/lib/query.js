@@ -1,4 +1,5 @@
 const assert = require("./assertions");
+const utils = require("./utils");
 
 function getRootBoundNode(path, name) {
   let binding = path.scope.getBinding(name);
@@ -79,6 +80,14 @@ function findComponentRoot(path) {
   return componentPath;
 }
 
+function findComponentBlockStatement(path) {
+  if (findComponentRoot(path))
+    return utils.findNearestAncestor(path, (p) => {
+      if (p.node.type === "BlockStatement" && !assert.isInnerFunction(path))
+        return true;
+    });
+}
+
 module.exports = {
   getRootBoundNode,
   getObservableBinding,
@@ -86,4 +95,5 @@ module.exports = {
   findNestedObservables,
   getFunctionParams,
   findComponentRoot,
+  findComponentBlockStatement,
 };

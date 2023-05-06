@@ -22,9 +22,9 @@ function isCalleeModuleMethod(node, property) {
   return false;
 }
 
-function isModuleMethod(path, name) {
-  if (path.node.type === "CallExpression") {
-    const callee = path.node.callee;
+function isModuleMethod(path, node, name) {
+  if (node.type === "CallExpression") {
+    const callee = node.callee;
 
     if (callee.type === "Identifier") {
       const binding = path.scope.getBinding(callee.name);
@@ -56,14 +56,14 @@ function isModuleMethod(path, name) {
 function isIdentifierInDeps(path) {
   return matchParentRecursively(path, (p) => {
     if (p.type === "ArrayExpression") {
-      if (isModuleMethod(p.parentPath, "conditional")) {
+      if (isModuleMethod(p.parentPath, p.parentPath.node, "conditional")) {
         if (p.parentPath.node.arguments[0] === p.node) return true;
         return false;
       }
 
       return (
-        isModuleMethod(p.parentPath, "compute") ||
-        isModuleMethod(p.parentPath, "effect")
+        isModuleMethod(p.parentPath, p.parentPath.node, "compute") ||
+        isModuleMethod(p.parentPath, p.parentPath.node, "effect")
       );
     }
   });
@@ -100,7 +100,9 @@ function bodyContainsContext(path) {
 }
 
 function isWrappedInComputedFunc(path) {
-  return matchParentRecursively(path, (p) => isModuleMethod(p, "compute"));
+  return matchParentRecursively(path, (p) =>
+    isModuleMethod(p, p.node, "compute")
+  );
 }
 
 function isInConditionalCondition(path) {

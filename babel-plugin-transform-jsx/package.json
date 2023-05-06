@@ -2,7 +2,7 @@
   "name": "babel-plugin-transform-jsx",
   "version": "1.0.0",
   "description": "",
-  "main": "./lib/index.js",
+  "main": "./index.js",
   "author": "Domenic Di Nenno",
   "license": "ISC"
 }
