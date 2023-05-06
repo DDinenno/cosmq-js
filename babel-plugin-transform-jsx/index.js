@@ -129,6 +129,8 @@ exports.default = function (babel) {
     }
   }
 
+  let hoistCount = 0;
+
   const transformJSX = (path) => {
     var openingElement = path.node.openingElement;
     var tagName = openingElement.name.name;
@@ -222,8 +224,8 @@ exports.default = function (babel) {
     visitor: {
       CallExpression(path) {
         if (
-          assert.isModuleMethod(path, "effect") ||
-          assert.isModuleMethod(path, "compute")
+          assert.isModuleMethod(path, path.node, "effect") ||
+          assert.isModuleMethod(path, path.node, "compute")
         ) {
           // transforms shorthand methods to include deps, if not provided
           if (path.node.arguments[1] == null) {
@@ -245,7 +247,50 @@ exports.default = function (babel) {
         }
       },
       JSXExpressionContainer(path) {
-        path.replaceWith(path.node.expression);
+        if (assert.isModuleMethod(path, path.node.expression, "compute")) {
+          const component = query.findComponentRoot(path);
+          if (!component) return;
+
+          const block = query.findComponentBlockStatement(path);
+          if (!block) throw new Error("Failed to find component block");
+
+          const returnIndex = block.node.body.findIndex(
+            (n) => n.type === "ReturnStatement"
+          );
+
+          if (returnIndex !== -1) {
+            hoistCount++;
+            const name = `computed__ref_${hoistCount}`;
+
+            const hoisted = t.variableDeclaration("const", [
+              t.variableDeclarator(t.identifier(name), path.node.expression),
+            ]);
+
+            block.node.body = [
+              ...block.node.body.slice(0, returnIndex),
+              hoisted,
+              ...block.node.body.slice(returnIndex, block.node.body.length),
+            ];
+
+            // has to traverse block to apply transformations on the recently hoisted variable,
+            // in-case there's JSXElements deeply nested in the expression
+            block.traverse({
+              Identifier: transformIdentifier,
+              CallExpression: transformComputed,
+              ConditionalExpression: transformComputed,
+              BinaryExpression: transformComputed,
+              LogicalExpression: transformComputed,
+              TemplateLiteral: transformComputed,
+              AssignmentExpression: transformAssignment,
+              JSXElement: transformJSX,
+              JSXExpressionContainer(p) {
+                p.replaceWith(p.node.expression);
+              },
+            });
+
+            path.replaceWith(t.jsxExpressionContainer(t.identifier(name)));
+          }
+        } else path.replaceWith(path.node.expression);
       },
       JSXText(path) {
         // remove Blank JSXText
@@ -256,8 +301,6 @@ exports.default = function (babel) {
         }
       },
       JSXElement(path) {
-        transformJSX(path);
-
         path.traverse({
           Identifier: transformIdentifier,
           CallExpression: transformComputed,
@@ -267,6 +310,8 @@ exports.default = function (babel) {
           TemplateLiteral: transformComputed,
           AssignmentExpression: transformAssignment,
         });
+
+        transformJSX(path);
       },
       Identifier: transformIdentifier,
       ConditionalExpression: transformComputed,
