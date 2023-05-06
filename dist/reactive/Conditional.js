@@ -1,26 +1,23 @@
 import Observable from "./Observable";
+import core from "../core";
 
 class Conditional {
   deps = [];
 
   conditions = [];
 
-  prevCondition = null;
-
-  newCondition = null;
-
-  config = null;
+  condition = undefined;
 
   onChange(cb) {
     this.deps.forEach((dep) => {
       if (dep instanceof Observable) {
         dep.listen(() => {
           // re-evalute
-          const previousConfig = this.config;
-          const newConfig = this.evaluate();
+          const newCondition = this.evaluate();
 
-          if (newConfig !== previousConfig) {
-            cb(newConfig, previousConfig);
+          if (this.condition !== newCondition) {
+            this.condition = newCondition;
+            cb(this.getConfig());
           }
         });
       }
@@ -30,20 +27,21 @@ class Conditional {
   constructor(deps, conditions) {
     this.conditions = conditions;
     this.deps = deps;
+    this.condition = this.evaluate();
   }
 
   evaluate() {
-    const matchedCondition = this.conditions.findIndex(
-      ({ __condition__: condition }) => !!condition(...this.deps)
+    return this.conditions.findIndex(
+      ({ __condition__: condition }) => !!condition()
     );
+  }
 
-    if (matchedCondition !== -1 && matchedCondition !== this.prevCondition) {
-      this.prevCondition = matchedCondition;
-      this.config = this.conditions[matchedCondition].body();
-      return this.config;
+  getConfig() {
+    if (this.condition !== -1) {
+      return this.conditions[this.condition].body();
     }
 
-    return this.config;
+    return null;
   }
 }
 
