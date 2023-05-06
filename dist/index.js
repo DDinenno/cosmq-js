@@ -2,7 +2,12 @@ import Observable from "./reactive/Observable";
 import Conditional from "./reactive/Conditional";
 import Formula from "./reactive/Formula";
 import core from "./core";
-import { mountNode, applyProperties, renderElement, renderDOM } from "./DOM";
+import {
+  mountNode,
+  applyProperties,
+  renderElement,
+  renderDOM,
+} from "./DOM/DOM";
 
 const observe = (initialValue) => new Observable(initialValue);
 const compute = (body, deps = []) => new Formula(body, deps);
