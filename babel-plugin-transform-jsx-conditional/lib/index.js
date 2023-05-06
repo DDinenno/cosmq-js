@@ -30,6 +30,12 @@ function getConditionInfo(node) {
   return { name, condition, body };
 }
 
+function isChildOf(path, targetPath) {
+  if (!path) return false;
+  if (path === targetPath) return true;
+  return isChildOf(path.parentPath, targetPath);
+}
+
 exports.default = function (babel) {
   const { types: t } = babel;
 
@@ -40,56 +46,34 @@ exports.default = function (babel) {
     deps = [];
     scope = null;
 
-    constructor(scope) {
-      this.scope = scope;
+    constructor(path) {
+      this.path = path;
+      this.scope = path.scope;
     }
 
-    appendObservablesToDeps2(condition) {
+    appendObservablesToDeps(child, condition) {
       if (condition) {
-        const { bindings } = this.scope;
-        const searchSideForVariables = (side) => {
-          if (side.type === "BinaryExpression")
-            this.appendObservablesToDeps(side);
-          if (side.type === "Identifier") {
-            //if(Object.keys(bindings).includes(side.name)) {
-            this.deps.push(side);
-            // }
-          }
-        };
+        this.path.traverse({
+          CallExpression: (p) => {
+            if (child.expression.callee !== p.node) return;
+            if (conditionalExpressions.includes(p.node.callee.name)) {
+              p.traverse({
+                Identifier: (ip) => {
+                  const binding = ip.scope.getBinding(ip.node.name);
 
-        if (condition.type === "BinaryExpression") {
-          const { left, right } = condition;
-          searchSideForVariables(left);
-          searchSideForVariables(right);
-        } else if (condition.type === "Identifier") {
-          this.deps.push(condition);
-        } else if (condition.type === "MemberExpression") {
-          if (condition.property && condition.property.type === "Identifier") {
-            this.deps.push(condition.property);
-          }
-        }
+                  if (!binding) return;
+                  if (conditionalExpressions.includes(ip.node.name)) return;
+                  if (!this.deps.some((n) => n.name === ip.node.name))
+                    this.deps.push(ip.node);
+                },
+              });
+            }
+          },
+        });
       }
     }
 
-    appendObservablesToDeps(condition) {
-      if (condition) {
-        const { bindings } = this.scope;
-
-        if (condition.type === "BinaryExpression") {
-          const { left, right } = condition;
-          this.appendObservablesToDeps(left);
-          this.appendObservablesToDeps(right);
-        } else if (condition.type === "MemberExpression") {
-          if (condition.object && condition.object) {
-            this.appendObservablesToDeps(condition.object);
-          }
-        } else if (condition.type === "Identifier") {
-          this.deps.push(condition);
-        }
-      }
-    }
-
-    appendCondition(type, condition, body) {
+    appendCondition(child, type, condition, body) {
       if (type === "IF") {
         if (this.if != null)
           throw new Error("Expecting ELSEIF or ELSE condition, found IF");
@@ -110,7 +94,7 @@ exports.default = function (babel) {
         this.else = { condition: t.booleanLiteral(true), body };
       }
 
-      if (condition) this.appendObservablesToDeps(condition);
+      if (condition) this.appendObservablesToDeps(child, condition);
     }
 
     transform() {
@@ -154,59 +138,87 @@ exports.default = function (babel) {
       );
     }
   }
+
+  function transformExpression(path) {
+    const children = [];
+    let currentCondition = null;
+
+    const previousChildren = path.node.children.filter((child) => {
+      if (child.type === "JSXText") {
+        if (child.value.replace(/\n|\r\n|\s|\t/gi, "").length === 0) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // path.node.children.reduce((conditions, child) => {
+    //   if (child.type === "JSXText") {
+    //     if (child.value.replace(/\n|\r\n|\s|\t/gi, "").length === 0) {
+    //       return conditions;
+    //     }
+    //   }
+
+    //   const currentCondition = conditions.length - 1;
+    //   if(conditions[currentCondition] === null) return;
+
+    //   return conditions;
+    // }, [])
+
+    previousChildren.forEach((child, index) => {
+      if (isConditionExpression(child)) {
+        const { name, condition, body } = getConditionInfo(child);
+
+        if (!currentCondition) {
+          currentCondition = new ConditionExpression(path);
+          currentCondition.appendCondition(child, name, condition, body);
+        } else {
+          if (name === "IF") {
+            if (currentCondition.if != null) {
+              children.push(currentCondition.transform());
+              currentCondition = null;
+            }
+
+            // children.push(currentCondition.transform());
+            currentCondition = new ConditionExpression(path);
+            currentCondition.appendCondition(child, name, condition, body);
+          }
+          if (name === "ELSEIF")
+            currentCondition.appendCondition(child, name, condition, body);
+          if (name === "ELSE") {
+            currentCondition.appendCondition(child, name, true, body);
+            children.push(currentCondition.transform());
+            currentCondition = null;
+          }
+        }
+        if (currentCondition && index === previousChildren.length - 1) {
+          children.push(currentCondition.transform());
+          currentCondition = null;
+        }
+      } else {
+        if (currentCondition) {
+          children.push(currentCondition.transform());
+          currentCondition = null;
+        }
+
+        children.push(child);
+      }
+    });
+
+    path.node.children = children;
+  }
+
   return {
     name: "ast-transform",
     visitor: {
       Identifier(path) {},
+      BlockStatement(path) {
+        path.traverse({
+          JSXElement: transformExpression.bind(this),
+        });
+      },
       JSXElement(path) {
-        const children = [];
-        let currentCondition = null;
-
-        const previousChildren = path.node.children.filter((child) => {
-          if (child.type === "JSXText") {
-            if (child.value.replace(/\n|\r\n|\s|\t/gi, "").length === 0) {
-              return false;
-            }
-          }
-          return true;
-        });
-
-        previousChildren.forEach((child, index) => {
-          if (isConditionExpression(child)) {
-            const { name, condition, body } = getConditionInfo(child);
-
-            if (!currentCondition) {
-              currentCondition = new ConditionExpression(path.scope);
-              currentCondition.appendCondition(name, condition, body);
-            } else {
-              if (name === "IF") {
-                children.push(currentCondition.transform());
-                currentCondition = new ConditionExpression(path.scope);
-                currentCondition.appendCondition(name, condition, body);
-              }
-              if (name === "ELSEIF")
-                currentCondition.appendCondition(name, condition, body);
-              if (name === "ELSE") {
-                currentCondition.appendCondition(name, true, body);
-                children.push(currentCondition.transform());
-                currentCondition = null;
-              }
-            }
-            if (currentCondition && index === previousChildren.length - 1) {
-              children.push(currentCondition.transform());
-              currentCondition = null;
-            }
-          } else {
-            if (currentCondition) {
-              children.push(currentCondition.transform());
-              currentCondition = null;
-            }
-
-            children.push(child);
-          }
-        });
-
-        path.node.children = children;
+        transformExpression.bind(this)(path);
       },
     },
   };
