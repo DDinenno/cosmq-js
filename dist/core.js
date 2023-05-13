@@ -1,15 +1,16 @@
-import Conditional from "./reactive/Conditional";
-import { renderElement, mountNode } from "./DOM";
+import Conditional from "./entities/Conditional";
 import Observable from "./reactive/Observable";
+import Component from "./entities/Component";
+import EventEmitter from "./events/EventEmitter";
 
 class Core {
   #registeringComponents = [];
 
   #components = {};
 
-  currentId = 0;
-
   observables = {};
+
+  events = new EventEmitter([]);
 
   evalObservable(arg) {
     if (arg instanceof Observable === false)
@@ -32,54 +33,55 @@ class Core {
   }
 
   registerObservable(instance) {
-    const componentNode = this.getComponentContext();
-
-    if (componentNode == null) {
+    const component = this.getComponentContext();
+    if (component == null) {
       throw new Error(
         "initializing observable after component was registered!"
       );
     }
 
-    componentNode.observables.push(instance);
+    component.addObservable(instance);
 
-    return componentNode.symbol;
+    return component;
   }
 
-  registerComponent(name, component, properties = {}) {
-    const id = `${name}[${this.getComponentId()}]`;
+  registerEffect(instance) {
+    const component = this.getComponentContext();
+    if (component == null) {
+      throw new Error(
+        "initializing effect after component was registered!"
+      );
+    }
 
-    const componentNode = {
-      id,
-      name,
-      symbol: Symbol("component"),
-      observables: [],
-      isComponent: true,
-      ref: null,
-    };
+    component.addEffect(instance);
 
-    this.#components[id] = componentNode;
-    this.#registeringComponents =
-      this.#registeringComponents.concat(componentNode);
+    return component;
+  }
 
-    let currentDomRef = null;
-    const renderConfig = component(properties);
+  registerComponent(name, componentFn, properties = {}) {
+    const component = new Component(name, properties, componentFn);
 
-    let unmountFns = [];
-    const onUnmount = (fn) => unmountFns.push(fn);
-    const triggerOnUnMountFns = () => {
-      unmountFns.forEach((fn) => fn());
-      unmountFns = [];
-    };
-    const domRef = renderElement(renderConfig, onUnmount);
-    componentNode.ref = domRef;
-    domRef.classList.add(`component-${id}`);
+    this.#components[component.id] = component;
+    this.#registeringComponents = this.#registeringComponents.concat(component);
+    this.#lastRegisteredEntity = component
 
+    component.render(componentFn, properties);
     this.#registeringComponents = this.#registeringComponents.filter(
-      (c) => c.id !== id
+      (c) => c.id !== component.id
     );
 
-    return componentNode;
+
+    component.events.on("mount", () => {
+    })
+
+    component.events.onOnce("unmount", () => {
+      delete this.#components[component.id];
+    });
+
+    return component;
   }
+
+
 }
 
 export default new Core();

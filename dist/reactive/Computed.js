@@ -1,6 +1,6 @@
 import Observable from "./Observable";
 
-class Formula extends Observable {
+class Computed extends Observable {
   dependencies = [];
 
   constructor(computeFn, dependencies = []) {
@@ -8,11 +8,13 @@ class Formula extends Observable {
 
     this.dependencies = dependencies;
 
-    this.dependencies.forEach((dep, index) => {
+
+    this.dependencies.forEach((dep) => {
       if (dep instanceof Observable) {
-        dep.listen(() => {
+        const unsub = dep.listen(() => {
           this.set(computeFn(...this.dependencies));
         });
+        this.origin.events.onOnce("unmount", unsub)
       }
     });
 
@@ -27,4 +29,4 @@ class Formula extends Observable {
   }
 }
 
-export default Formula;
+export default Computed;

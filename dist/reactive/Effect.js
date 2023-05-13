@@ -1,32 +1,37 @@
-import Observable from "./Observable"
+import Observable from "./Observable";
 
 class Effect {
-    listeners = [];
-  
-    dependencies = [];
-  
-    constructor(body, deps) {
-      deps.forEach((dep, index) => {
-        if (dep instanceof Observable) {
-          this.dependencies[index] = dep.value;
-          dep.listen((newValue) => {
-            this.dependencies[index] = newValue;
-            body(...this.dependencies);
-          });
-        } else this.dependencies[index] = dep;
-      });
-  
-      body(...this.dependencies);
-    }
-  
-    listen(listener) {
-      this.listeners.push(listener);
-    }
-  
-    mute(listener) {
-      this.listeners = this.listeners.filter((ln) => ln !== listener);
-    }
-  }
+  dependencies = [];
 
-  
-  export default Effect;
+  origin = null;
+
+  constructor(body, deps) {
+    this.origin = core.registerEffect(this);
+
+    body(...this.dependencies);
+
+    deps.forEach((dep, index) => {
+      if (dep instanceof Observable) {
+        this.dependencies[index] = dep.value;
+        // TODO: cleanup
+        const unsub = dep.listen((newValue) => {
+          this.dependencies[index] = newValue;
+          body(...this.dependencies);
+        });
+
+        this.origin.events.onOnce("unmount", unsub)
+      } else this.dependencies[index] = dep;
+    });
+
+
+    this.origin.events.onOnce("unmount", () => {
+      this.deps = []
+      this.origin = null;
+    })
+
+
+  }
+}
+
+
+export default Effect;
