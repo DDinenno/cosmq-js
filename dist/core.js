@@ -1,5 +1,5 @@
 import Conditional from "./entities/Conditional";
-import Observable from "./reactive/Observable";
+import Observable from "./entities/Observable";
 import Component from "./entities/Component";
 import EventEmitter from "./events/EventEmitter";
 
@@ -63,7 +63,6 @@ class Core {
 
     this.#components[component.id] = component;
     this.#registeringComponents = this.#registeringComponents.concat(component);
-    this.#lastRegisteredEntity = component
 
     component.render(componentFn, properties);
     this.#registeringComponents = this.#registeringComponents.filter(

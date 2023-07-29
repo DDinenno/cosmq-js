@@ -13,7 +13,6 @@ class Effect {
     deps.forEach((dep, index) => {
       if (dep instanceof Observable) {
         this.dependencies[index] = dep.value;
-        // TODO: cleanup
         const unsub = dep.listen((newValue) => {
           this.dependencies[index] = newValue;
           body(...this.dependencies);

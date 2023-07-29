@@ -1,9 +1,10 @@
-import Observable from "../reactive/Observable";
+import Observable from "../entities/Observable";
 import Conditional from "../entities/Conditional";
 import Component from "../entities/Component";
-import { flattenChildren } from "./utils";
+import ObservableArray from "../entities/ObservableArray"
+import { flattenChildren, insertChildAtIndex } from "./utils";
 
-function mountNode(parent, newNode, oldNode = null, index) {
+function mountNode(parent, newNode, oldNode = null) {
   if (!parent) {
     throw new Error("No parent provided!");
   }
@@ -15,6 +16,8 @@ function mountNode(parent, newNode, oldNode = null, index) {
   if (!oldNode) {
     parent.appendChild(newNode);
   } else parent.replaceChild(newNode, oldNode);
+
+  return newNode
 }
 
 function observeNodeUnmount(node, callback) {
@@ -84,95 +87,15 @@ function applyProperties(node, properties) {
   });
 }
 
-function handleObservableArray(observable, parentNode) {
-  const context = {
-    config: null,
-    domRef: null,
-    keys: [],
-    children: [],
-    changed: false,
-  };
 
-  const getChildConfigs = () => {
-    const newKeys = [];
-    const children = observable.value || [];
-
-    const { children: prevChildren, keys: prevKeys } = context;
-
-    const foundKeys = [];
-    const newChildren = children.map((childConfig, index) => {
-      const { key } = childConfig.properties || {};
-      if (key == null) throw new Error("Array items must have a key");
-      if (foundKeys.includes(key))
-        throw new Error("Found a duplicate key in child array!");
-      foundKeys.push(key);
-
-      newKeys.push(key);
-
-      if (prevKeys[index] === key) {
-        return prevChildren[index];
-      } else {
-        context.changed = true;
-        return renderElement(childConfig);
-      }
-    });
-
-    if (prevChildren.length !== newChildren.length) {
-      context.changed = true;
-    }
-
-    context.keys = newKeys;
-    context.children = newChildren;
-
-    return newChildren;
-  };
-
-  const renderChildren = (newValue) => {
-    const children = getChildConfigs();
-
-    if (context.changed) {
-      if (!context.domRef) {
-        context.domRef = renderElement({
-          type: "div",
-          properties: {},
-          children: [],
-        });
-        mountNode(parentNode, context.domRef);
-      }
-    }
-
-    const nodes = [...context.domRef.childNodes];
-
-    if (children.length === 0) {
-      for (let i = 0; i < nodes.length; i++) {
-        context.domRef.removeChild(nodes[0]);
-      }
-    } else {
-      children.forEach((child, index) => {
-        if (nodes[index] === child) return;
-        mountNode(context.domRef, child, nodes[index]);
-      });
-
-      if (children.length < nodes.length) {
-        for (let i = children.length; i < nodes.length; i++) {
-          context.domRef.childNodes[i].remove();
-        }
-      }
-    }
-
-    context.changed = false;
-  };
-
-  renderChildren(observable.value);
-  const unsub = observable.listen(renderChildren);
-  observeNodeUnmount(parentNode, unsub);
-}
-
-
-function handleRenderingObservableElement(child, parent, mountNode) {
+function handleRenderingObservableElement(child, parent) {
   if (Array.isArray(child.value)) {
-    handleObservableArray(child, parent);
+    const obsArray = new ObservableArray(parent, child,)
+    obsArray.renderChildren(parent, child)
+    const unsub = child.listen(() => obsArray.renderChildren(parent, child));
+    observeNodeUnmount(parent, unsub);
   } else {
+
     if (parent.localName === "input") {
       applyProperties(parent, { value: child.value });
 
@@ -181,6 +104,8 @@ function handleRenderingObservableElement(child, parent, mountNode) {
       });
       observeNodeUnmount(parent, unsub);
     } else {
+
+
       let currentRef = new Text(child.value);
       mountNode(parent, currentRef);
 
@@ -203,13 +128,16 @@ function renderElement(tree) {
 
   let childrenArr = flattenChildren(children);
 
+
+
   // append children
   if (childrenArr && childrenArr.length)
     childrenArr.forEach((child, childIndex) => {
       if (typeof child === "string") {
-        applyProperties(node, { innerHTML: child });
+        mountNode(node, new Text(child))
+
       } else if (child instanceof Observable) {
-        handleRenderingObservableElement(child, node, mountNode);
+        handleRenderingObservableElement(child, node);
       } else if (child instanceof Component) {
         child.mount(node);
         observeNodeUnmount(node, () => child.unmount());

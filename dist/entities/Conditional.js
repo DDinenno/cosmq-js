@@ -1,4 +1,4 @@
-import Observable from "../reactive/Observable";
+import Observable from "./Observable";
 import debounce from "../utils/debounce";
 import BaseMountableEntity from "./BaseMountableEntity"
 import { mountNode, renderElement } from "../DOM/DOM"

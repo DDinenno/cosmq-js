@@ -1,6 +1,6 @@
-import Observable from "./reactive/Observable";
+import Observable from "./entities/Observable";
 import Conditional from "./entities/Conditional";
-import Computed from "./reactive/Computed";
+import Computed from "./entities/Computed";
 import core from "./core";
 import {
   mountNode,
