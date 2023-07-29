@@ -1,4 +1,4 @@
-import { renderElement, mountNode } from "../DOM/DOM"
+import { renderElement, mountNode } from "../DOM/DOM";
 import { insertChildAtIndex } from "../DOM/utils";
 
 const placeholderKey = Symbol("placeholder");
@@ -51,10 +51,7 @@ export default class ObservableArray {
             didChange = true;
         }
 
-        console.log({ didChange })
-
         this.keys = newKeys;
-
 
         return didChange ? newChildren : prevChildren;
     }
@@ -62,7 +59,6 @@ export default class ObservableArray {
     renderChildren(parent, observable) {
         const prevChildren = this.children;
         const newChildren = this.getChildren(observable);
-        console.log(newChildren === prevChildren)
         if (newChildren === prevChildren) return;
 
         let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);
@@ -71,7 +67,6 @@ export default class ObservableArray {
         newChildren.forEach((child, index) => {
             if (prevChildren[index] === child) return;
 
-            console.log("chaned", index)
             if (prevChildren[index]) mountNode(parent, child, prevChildren[index]);
             else insertChildAtIndex(parent, child, startIndex + index);
         });
