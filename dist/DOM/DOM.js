@@ -1,8 +1,31 @@
 import Observable from "../entities/Observable";
 import Conditional from "../entities/Conditional";
 import Component from "../entities/Component";
-import ObservableArray from "../entities/ObservableArray"
+import ObservableArray from "../entities/ObservableArray";
 import { flattenChildren, insertChildAtIndex } from "./utils";
+import batchInvoke from "../utils/batchInvoke";
+import EventEmitter from "../events/EventEmitter";
+
+export const eventEmitter = new EventEmitter(["unmount"])
+
+const config = { childList: true, subtree: true };
+
+  const observer = new MutationObserver((mutationList) => {
+    for (const mutation of mutationList) {
+      if (mutation.type === "childList" && mutation.removedNodes.length) {
+        const { removedNodes } = mutation;
+
+        for (let i = 0; i < removedNodes.length; i++) {
+          const node = removedNodes[i];
+
+
+          eventEmitter.dispatch("unmount", node)
+        }
+      }
+    }
+  });
+
+  observer.observe(document, config);
 
 function mountNode(parent, newNode, oldNode = null) {
   if (!parent) {
@@ -17,31 +40,16 @@ function mountNode(parent, newNode, oldNode = null) {
     parent.appendChild(newNode);
   } else parent.replaceChild(newNode, oldNode);
 
-  return newNode
+  return newNode;
 }
 
 function observeNodeUnmount(node, callback) {
-  const config = { childList: true, subtree: true };
-
-  const observer = new MutationObserver((mutationList) => {
-    for (const mutation of mutationList) {
-      if (mutation.type === "childList" && mutation.removedNodes.length) {
-        const { removedNodes } = mutation;
-
-        for (let i = 0; i < removedNodes.length; i++) {
-          const n = removedNodes[i];
-
-          if (n === node || n.contains(node)) {
-            observer.disconnect();
-            callback();
-            break;
-          }
-        }
-      }
-    }
-  });
-
-  observer.observe(document, config);
+ const unsubscribe = eventEmitter.on("unmount", unmountedNode => {
+  if(unmountedNode === node) {
+    callback()
+    unsubscribe()
+  }
+ })  
 }
 
 function applyProperties(node, properties) {
@@ -87,15 +95,18 @@ function applyProperties(node, properties) {
   });
 }
 
-
 function handleRenderingObservableElement(child, parent) {
-  if (Array.isArray(child.value)) {
-    const obsArray = new ObservableArray(parent, child,)
-    obsArray.renderChildren(parent, child)
-    const unsub = child.listen(() => obsArray.renderChildren(parent, child));
-    observeNodeUnmount(parent, unsub);
+  if (typeof child.value === "object" && "ObservableArray" in child.value) {
+    // const obsArray = new ObservableArray(child);
+    // obsArray.renderChildren(parent, child, mountNode, renderElement);
+    // const unsub = child.listen(() =>
+    //   obsArray.renderChildren(parent, child, mountNode, renderElement)
+    // );
+    // observeNodeUnmount(parent, () => {
+    //   unsub()
+    //   obsArray.unmount()
+    // });
   } else {
-
     if (parent.localName === "input") {
       applyProperties(parent, { value: child.value });
 
@@ -104,48 +115,82 @@ function handleRenderingObservableElement(child, parent) {
       });
       observeNodeUnmount(parent, unsub);
     } else {
-
-
-      let currentRef = new Text(child.value);
+      let currentRef =
+        child.value instanceof Element ? child.value : new Text(child.value);
       mountNode(parent, currentRef);
 
       const unsub = child.listen(() => {
-        let newRef = new Text(child.value);
-        mountNode(parent, newRef, currentRef);
-        currentRef = newRef;
+        let newRef = currentRef
+        
+          if (child.value instanceof Element) {
+            newRef = child.value
+            mountNode(parent, newRef, currentRef);
+          } else if(typeof child.value === ("string" || "number"))  {
+
+                  
+            if(currentRef instanceof Text) {
+              currentRef.data = child.value
+            } else {
+              newRef = new Text(child.value);
+              mountNode(parent, newRef, currentRef);
+            }
+          } else {
+            console.debug("Unhandled case", child.value)
+          }
+          
+          // mountNode(parent, newRef, currentRef);
+          currentRef = newRef;
       });
       observeNodeUnmount(parent, unsub);
     }
   }
 }
 
-function renderElement(tree) {
-  const { type = "null", properties = {}, children = [] } = tree || {};
+function renderElement(_type, _properties, _children) {
+  const type = _type ?? "div";
+  const { key, ...properties } = _properties ?? {};
+  const children = _children ?? [];
+
   const node = document.createElement(type, properties);
+
 
   // apply properties
   applyProperties(node, properties);
 
-  let childrenArr = flattenChildren(children);
-
-
+  let childrenArr = Array.isArray(children) ? children : [children]; // flattenChildren(children);
 
   // append children
   if (childrenArr && childrenArr.length)
     childrenArr.forEach((child, childIndex) => {
-      if (typeof child === "string") {
-        mountNode(node, new Text(child))
+      if (typeof child === ("string" || "number")) {
+        mountNode(node, new Text(child));
+      } else if (child instanceof ObservableArray) {
+        child.mount(node, mountNode, renderElement)
+        observeNodeUnmount(node, () => child.unmount());
 
       } else if (child instanceof Observable) {
         handleRenderingObservableElement(child, node);
       } else if (child instanceof Component) {
         child.mount(node);
+        mountNode(node, child.ref);
         observeNodeUnmount(node, () => child.unmount());
       } else if (child instanceof Conditional) {
-        child.mount(node);
+        child.mount(node, mountNode);
         observeNodeUnmount(node, () => child.unmount());
+      } else if (child instanceof Element) {
+        mountNode(node, child);
+      } else if (child == null) {
+        // do nothing
+      } else if (Array.isArray(child)) {
+        child.forEach((c) => {
+          if (c instanceof Element) {
+            mountNode(node, c);
+          } else {
+            console.debug("unhandled case", c);
+          }
+        });
       } else {
-        mountNode(node, renderElement(child));
+        console.debug("unhandled case", child);
       }
     });
 
@@ -155,7 +200,10 @@ function renderElement(tree) {
 function renderDOM(component, targetId = "root") {
   const target = document.getElementById(targetId);
   if (!target) throw new Error("target not found");
-  mountNode(target, component.ref);
+
+  requestAnimationFrame(() => {
+    mountNode(target, component.ref);
+  });
 }
 
 export { mountNode, applyProperties, renderElement, renderDOM };

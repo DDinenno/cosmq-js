@@ -1,4 +1,4 @@
-import { mountNode, renderElement } from "../DOM/DOM";
+import core from "../core"
 import BaseMountableEntity from "./BaseMountableEntity";
 
 class Component extends BaseMountableEntity {
@@ -13,10 +13,13 @@ class Component extends BaseMountableEntity {
 
     effects = []
 
-    constructor(name) {
-        super([]);
+    constructor(name, componentFn, properties = {}) {
+        super(["render"]);
 
         this.name = name;
+
+        core.registerComponent(this)
+        this.render(componentFn, properties)
 
         this.events.onOnce("unmount", () => {
             this.observables = []
@@ -34,12 +37,12 @@ class Component extends BaseMountableEntity {
     }
 
     render(componentFn, properties) {
-        this.ref = renderElement(componentFn(properties), () => { });
+        this.ref = componentFn(properties)
+        this.events.dispatch("render")
     }
 
     mount(parent) {
         this.events.dispatch("mount", parent, this.ref)
-        mountNode(parent, this.ref)
     }
 
     unmount() {

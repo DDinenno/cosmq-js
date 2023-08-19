@@ -1,6 +1,7 @@
 import Observable from "./entities/Observable";
+import Computed from "./entities/Computed"
+import Effect from "./entities/Effect"
 import Conditional from "./entities/Conditional";
-import Computed from "./entities/Computed";
 import core from "./core";
 import {
   mountNode,
@@ -8,19 +9,30 @@ import {
   renderElement,
   renderDOM,
 } from "./DOM/DOM";
+import Component from "./entities/Component";
+import ObservableArray from "./entities/ObservableArray";
 
 const observe = (initialValue) => new Observable(initialValue);
+const observableArray = (...args) => new ObservableArray(...args);
 const compute = (body, deps = []) => new Computed(body, deps);
-const effect = (body, deps = []) => new Computed(body, deps);
-const conditional = (deps, conditions) => new Conditional(deps, conditions)
+const effect = (body, deps = []) => new Effect(body, deps);
+const conditional = (deps, conditions) => new Conditional(deps, conditions);
+const registerComponent = (name, componentFn, properties) => new Component(name, componentFn, properties);
 
-const registerComponent = core.registerComponent.bind(core);
 const getComponentContext = core.getComponentContext.bind(core);
-const evalObservable = core.evalObservable.bind(core);
-const getPropValue = core.getPropValue.bind(core);
+
+const evalObservable = (arg) => {
+  if (arg instanceof Observable === false)
+    throw new Error("This is not an Observable!");
+
+  return arg;
+}
+
+const getPropValue = prop => prop instanceof Observable ? prop.value : prop;
 
 const PlaceholderJs = {
   observe,
+  observableArray,
   compute,
   effect,
   conditional,
@@ -37,6 +49,7 @@ const PlaceholderJs = {
 export default PlaceholderJs;
 export {
   observe,
+  observableArray,
   compute,
   effect,
   conditional,

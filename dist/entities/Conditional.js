@@ -1,8 +1,7 @@
-import Observable from "./Observable";
 import debounce from "../utils/debounce";
-import BaseMountableEntity from "./BaseMountableEntity"
-import { mountNode, renderElement } from "../DOM/DOM"
-import { insertChildAtIndex } from "../DOM/utils"
+import BaseMountableEntity from "./BaseMountableEntity";
+import Observable from "./Observable";
+import { insertChildAtIndex } from "../DOM/utils";
 
 class Conditional extends BaseMountableEntity {
   deps = [];
@@ -12,31 +11,34 @@ class Conditional extends BaseMountableEntity {
   condition = undefined;
 
   constructor(deps, conditions) {
-    super(["change", "changeEnd", "render"]);
+    super(["beforeChange", "change", "render"]);
 
     this.conditions = conditions;
     this.deps = deps;
     this.condition = this.evaluate();
 
     const handleChange = debounce(() => {
+      this.events.dispatch("beforeChange", {});
       const newCondition = this.evaluate();
 
       if (this.condition !== newCondition) {
         this.condition = newCondition;
-        this.events.dispatch("change", this.getConfig())
+        this.events.dispatch("change", this.getConfig());
       }
     });
 
     this.deps.forEach((dep) => {
       if (dep instanceof Observable) {
         const unsub = dep.listen(handleChange);
-        this.events.onOnce("unmount", unsub)
+        this.events.onOnce("unmount", unsub);
       }
     });
 
     this.events.onOnce("unmount", () => {
       this.deps = [];
-    })
+      this.conditions = [];
+      this.condition = null;
+    });
   }
 
   evaluate() {
@@ -52,15 +54,14 @@ class Conditional extends BaseMountableEntity {
       config = this.conditions[this.condition].body();
     }
 
-    this.events.dispatch("render", config)
+    this.events.dispatch("render", config);
 
     return config;
   }
 
-
-  mount(parent) {
+  mount(parent, mountNode) {
     let config = this.getConfig();
-    let domRef = renderElement(config);
+    let domRef = config;
     const index = parent.childNodes.length;
 
     const unsub = this.events.on("change", (newConfig) => {
@@ -73,7 +74,7 @@ class Conditional extends BaseMountableEntity {
       } else {
         const prevDomRef = domRef;
         config = newConfig;
-        domRef = renderElement(config);
+        domRef = config;
 
         if (currentConfig == null) {
           insertChildAtIndex(parent, domRef, index);
@@ -83,17 +84,15 @@ class Conditional extends BaseMountableEntity {
       }
     });
 
-    this.events.onOnce("unmount", unsub)
+    this.events.onOnce("unmount", unsub);
 
     mountNode(parent, domRef);
-    this.events.dispatch("mount")
+    this.events.dispatch("mount");
   }
 
   unmount() {
-    this.events.dispatch("unmount")
+    this.events.dispatch("unmount");
   }
-
-
 }
 
 export default Conditional;

@@ -1,4 +1,5 @@
 import Observable from "./Observable";
+import core from "../core";
 
 class Effect {
   dependencies = [];

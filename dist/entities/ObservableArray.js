@@ -1,82 +1,163 @@
-import { renderElement, mountNode } from "../DOM/DOM";
 import { insertChildAtIndex } from "../DOM/utils";
+import Observable from "./Observable";
 
 const placeholderKey = Symbol("placeholder");
 
 export default class ObservableArray {
-    children = [];
+  data = [];
 
-    keys = [];
+  children = [];
 
-    getChildren(observable) {
-        let didChange = false;
-        const newKeys = [];
-        const configArry = observable.value || [];
-        const { children: prevChildren, keys: prevKeys } = this;
+  keys = [];
 
-        let newChildren = configArry.map((childConfig, index) => {
-            const { key } = childConfig.properties || {};
-            if (key == null) throw new Error("Array items must have a key");
-            if (newKeys.includes(key))
-                throw new Error(
-                    "Found a duplicate key in child array! Keys must be unique."
-                );
+  obs = null;
 
-            newKeys.push(key);
+  renderFn = null;
 
-            if (prevKeys[index] === key) {
-                return prevChildren[index];
-            } else {
-                didChange = true;
-                return renderElement(childConfig);
-            }
-        });
+  getKey = null;
 
-        if (newChildren.length === 0) {
-            if (prevKeys[0] === placeholderKey) {
-                newChildren = prevChildren;
-            } else {
-                const child = renderElement({
-                    type: "span",
-                    properties: { hidden: true },
-                    children: [],
-                });
-                newChildren = [child];
-                didChange = true;
-            }
-            newKeys.push(placeholderKey);
+  invalidate = null;
+
+  subscription = null;
+
+  constructor(data, options, renderFn) {
+    const { getKey, invalidateFn} = options || {}
+    if (!data) throw new Error("No obserable provided!");
+    if (data instanceof Observable === false)
+      throw new Error("Data isn't an observable!");
+    this.assertValue(data.value);
+
+    this.obs = data;
+    this.renderFn = renderFn;
+    this.getKey = getKey;
+    this.invalidate = invalidateFn;
+  }
+
+  assertValue(value) {
+    if (!Array.isArray(value))
+      throw new Error("ObserableArray value must be an array!");
+  }
+
+  mount(parent, mountNode, renderElement) {
+    this.renderChildren(parent, mountNode, renderElement);
+
+    this.unsubscribe = this.obs.listen(() => {
+      this.renderChildren(parent, mountNode, renderElement);
+    });
+  }
+
+  unmount() {
+    if (this.unsubscribe) this.unsubscribe();
+
+    this.obs = null;
+    this.renderFn = null;
+    this.getKey = null;
+    this.childen = null;
+    this.keys = null;
+    this.invalidate = null;
+    this.data = null;
+  }
+
+  getChildren(renderElement) {
+    let didChange = false;
+    const newKeys = [];
+    const { children: prevChildren, keys: prevKeys } = this;
+    const prevData = this.data;
+    this.data = this.obs.value;
+
+    let newChildren = this.data.map((row, index) => {
+      const key = this.getKey(row);
+
+      if (key == null) throw new Error("Array items must have a key");
+      if (newKeys.includes(key))
+        throw new Error(
+          "Found a duplicate key in child array! Keys must be unique."
+        );
+
+      newKeys.push(key);
+
+      if (prevKeys[index] === key) {
+        if (
+          (this.invalidate &&
+            this.invalidate(this.data[index], prevData[index])) ||
+          this.data[index] !== prevData[index]
+        ) {
+          didChange = true;
+          return this.renderFn(row, index);
+        } else {
+          return prevChildren[index];
         }
+      } else {
+        didChange = true;
+        return this.renderFn(row, index);
+      }
+    });
 
-        if (prevChildren.length !== newChildren.length) {
-            didChange = true;
-        }
-
-        this.keys = newKeys;
-
-        return didChange ? newChildren : prevChildren;
+    if (newChildren.length === 0) {
+      if (prevKeys[0] === placeholderKey) {
+        newChildren = prevChildren;
+      } else {
+        const child = renderElement("span", { hidden: true }, []);
+        newChildren = [child];
+        didChange = true;
+      }
+      newKeys.push(placeholderKey);
     }
 
-    renderChildren(parent, observable) {
-        const prevChildren = this.children;
-        const newChildren = this.getChildren(observable);
-        if (newChildren === prevChildren) return;
+    if (prevChildren.length !== newChildren.length) {
+      didChange = true;
+    }
 
-        let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);
-        if (startIndex === -1) startIndex = parent.childNodes.length;
+    this.keys = newKeys;
 
-        newChildren.forEach((child, index) => {
-            if (prevChildren[index] === child) return;
+    return didChange ? newChildren : prevChildren;
+  }
 
-            if (prevChildren[index]) mountNode(parent, child, prevChildren[index]);
-            else insertChildAtIndex(parent, child, startIndex + index);
-        });
+  renderChildren(parent, mountNode, renderElement) {
+    const prevChildren = this.children;
+    const newChildren = this.getChildren(renderElement);
+    if (newChildren === prevChildren) return;
 
-        if (newChildren.length < prevChildren.length) {
-            for (let i = newChildren.length; i < prevChildren.length; i++) {
-                parent.removeChild(prevChildren[i]);
-            }
+    let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);
+    if (startIndex === -1) startIndex = parent.childNodes.length;
+
+    let frag = null;
+    const frags = [];
+
+    newChildren.forEach((child, index) => {
+      if (prevChildren[index] === child) {
+        frag = null;
+        return;
+      }
+
+      if (prevChildren[index]) {
+        frag = null;
+        mountNode(parent, child, prevChildren[index]);
+      } else {
+        if (frag == null) {
+          frag = {
+            node: document.createDocumentFragment(),
+            index: startIndex + index,
+          };
+          frags.push(frag);
         }
 
-        this.children = newChildren;
-    }
+        mountNode(frag.node, child);
+      }
+    });
+
+    requestAnimationFrame(() => {
+      frags.forEach((frag) => {
+        insertChildAtIndex(parent, frag.node, frag.index);
+      });
+
+      if (newChildren.length < prevChildren.length) {
+        for (let i = newChildren.length; i < prevChildren.length; i++) {
+          parent.removeChild(prevChildren[i]);
+        }
+      }
+    });
+
+    this.children = newChildren;
+  }
 }

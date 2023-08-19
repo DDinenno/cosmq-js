@@ -26,11 +26,11 @@ class BaseMountableEntity {
     }
 
     mount() {
-        throw new Error("Not implemented");
+      this.events.dispatch("mount", {}) 
     }
 
     unmount() {
-        throw new Error("Not implemented");
+        this.events.dispatch("mount", {}) 
     }
 }
 
