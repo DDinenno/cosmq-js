@@ -25,7 +25,7 @@ class Observable {
   }
 
   set(newValue) {
-    batchInvoke(this.id, () => {
+    batchInvoke("observable", this.id, () => {
       if (this.value !== newValue) {
         this.value = newValue;
         [...this.listeners].forEach((fn) => fn(newValue));

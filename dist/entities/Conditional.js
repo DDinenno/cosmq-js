@@ -60,12 +60,14 @@ class Conditional extends BaseMountableEntity {
   }
 
   mount(parent, mountNode) {
-    let config = this.getConfig();
-    let domRef = config;
+    const node = this.getConfig()
+    let config = typeof node === "function" ? node() : node
+    let domRef = config
+
     const index = parent.childNodes.length;
 
     const unsub = this.events.on("change", (newConfig) => {
-      const currentConfig = config;
+      const currentConfig = config
 
       if (newConfig == null) {
         config = null;
@@ -73,9 +75,8 @@ class Conditional extends BaseMountableEntity {
         domRef = null;
       } else {
         const prevDomRef = domRef;
-        config = newConfig;
+        config = typeof newConfig === "function" ? newConfig() : newConfig
         domRef = config;
-
         if (currentConfig == null) {
           insertChildAtIndex(parent, domRef, index);
         } else {

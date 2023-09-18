@@ -5,7 +5,14 @@ export function flattenChildren(children) {
     : (children && [children]) || [];
 
   array.forEach((child) => {
-    if (Array.isArray(child)) flattenedArray.push(...child);
+    if (Array.isArray(child)) {
+      child.forEach((nc) => {
+        const nested = flattenChildren(nc);
+        if (nested.length) {
+          array.push(...nested);
+        }
+      });
+    }
     return flattenedArray.push(child);
   });
 

@@ -2,30 +2,26 @@ import Observable from "../entities/Observable";
 import Conditional from "../entities/Conditional";
 import Component from "../entities/Component";
 import ObservableArray from "../entities/ObservableArray";
-import { flattenChildren, insertChildAtIndex } from "./utils";
-import batchInvoke from "../utils/batchInvoke";
 import EventEmitter from "../events/EventEmitter";
 
-export const eventEmitter = new EventEmitter(["unmount"])
-
-const config = { childList: true, subtree: true };
-
-  const observer = new MutationObserver((mutationList) => {
-    for (const mutation of mutationList) {
-      if (mutation.type === "childList" && mutation.removedNodes.length) {
-        const { removedNodes } = mutation;
-
-        for (let i = 0; i < removedNodes.length; i++) {
-          const node = removedNodes[i];
+export const eventEmitter = new EventEmitter(["unmount"]);
 
 
-          eventEmitter.dispatch("unmount", node)
-        }
+const observer = new MutationObserver((mutationList) => {
+  for (const mutation of mutationList) {
+    if (mutation.type === "childList" && mutation.removedNodes.length) {
+      const { removedNodes } = mutation;
+
+      for (let i = 0; i < removedNodes.length; i++) {
+        const node = removedNodes[i];
+
+        eventEmitter.dispatch("unmount", node);
       }
     }
-  });
+  }
+});
 
-  observer.observe(document, config);
+observer.observe(document,  { childList: true, subtree: true });
 
 function mountNode(parent, newNode, oldNode = null) {
   if (!parent) {
@@ -44,12 +40,25 @@ function mountNode(parent, newNode, oldNode = null) {
 }
 
 function observeNodeUnmount(node, callback) {
- const unsubscribe = eventEmitter.on("unmount", unmountedNode => {
-  if(unmountedNode === node) {
-    callback()
-    unsubscribe()
-  }
- })  
+  const unsubscribe = eventEmitter.on("unmount", (unmountedNode) => {
+    if (unmountedNode === node) {
+      callback();
+      unsubscribe();
+    }
+  });
+}
+
+function applyStyle(node, obj) {
+  Object.entries(obj).forEach(([key, _value]) => {
+    const value =
+      typeof _value === ("string" || "number") ? String(_value) : _value;
+
+    if (node.style[key] === value || (value == null && node.style[key] === "")) {
+      return;
+    }
+
+    node.style[key] = value;
+  });
 }
 
 function applyProperties(node, properties) {
@@ -57,12 +66,15 @@ function applyProperties(node, properties) {
     if (property === "key") {
       node.dataset.key = value;
     } else if (property === "style") {
+      applyStyle(node, value);
       applyProperties(node.style, value);
     } else if (property === "innerHTML") {
+      if (node[property] === value) return;
       node.append(value);
     } else {
       if (value instanceof Observable) {
         const observable = value;
+        if (node[property] === observable.value) return;
 
         // set property
         node[property] = observable.value;
@@ -89,6 +101,7 @@ function applyProperties(node, properties) {
           node.removeEventListener(eventName, value)
         );
       } else {
+        if (node[property] === value) return;
         node[property] = value;
       }
     }
@@ -96,17 +109,6 @@ function applyProperties(node, properties) {
 }
 
 function handleRenderingObservableElement(child, parent) {
-  if (typeof child.value === "object" && "ObservableArray" in child.value) {
-    // const obsArray = new ObservableArray(child);
-    // obsArray.renderChildren(parent, child, mountNode, renderElement);
-    // const unsub = child.listen(() =>
-    //   obsArray.renderChildren(parent, child, mountNode, renderElement)
-    // );
-    // observeNodeUnmount(parent, () => {
-    //   unsub()
-    //   obsArray.unmount()
-    // });
-  } else {
     if (parent.localName === "input") {
       applyProperties(parent, { value: child.value });
 
@@ -120,79 +122,102 @@ function handleRenderingObservableElement(child, parent) {
       mountNode(parent, currentRef);
 
       const unsub = child.listen(() => {
-        let newRef = currentRef
-        
-          if (child.value instanceof Element) {
-            newRef = child.value
-            mountNode(parent, newRef, currentRef);
-          } else if(typeof child.value === ("string" || "number"))  {
+        let newRef = currentRef;
 
-                  
-            if(currentRef instanceof Text) {
-              currentRef.data = child.value
-            } else {
-              newRef = new Text(child.value);
-              mountNode(parent, newRef, currentRef);
-            }
+        if (child.value instanceof Element) {
+          newRef = child.value;
+          mountNode(parent, newRef, currentRef);
+        } else if (typeof child.value === ("string" || "number")) {
+          if (currentRef instanceof Text) {
+            currentRef.data = child.value;
           } else {
-            console.debug("Unhandled case", child.value)
+            newRef = new Text(child.value);
+            mountNode(parent, newRef, currentRef);
           }
-          
-          // mountNode(parent, newRef, currentRef);
-          currentRef = newRef;
+        } else {
+          console.debug("Unhandled case", child.value);
+        }
+
+        currentRef = newRef;
       });
       observeNodeUnmount(parent, unsub);
     }
-  }
 }
 
-function renderElement(_type, _properties, _children) {
+function registerElement(type, properties, children) {
+  return (previousNode) =>
+    renderElement(type, properties, children, previousNode);
+}
+
+function renderChildren(parent, children, indexOffset = 0) {
+  let childrenArr = Array.isArray(children) ? children : [children];
+
+  // append children
+  childrenArr.forEach((child, i) => {
+    const childIndex = i + indexOffset;
+
+    const prevChild = parent.childNodes[childIndex];
+
+    if (typeof child === ("string" || "number")) {
+      if (prevChild instanceof Text) {
+        if (prevChild.data !== String(child)) {
+          prevChild.data = child;
+        }
+      } else mountNode(parent, new Text(child));
+    } else if (child instanceof ObservableArray) {
+      child.mount(parent, mountNode, renderElement);
+      observeNodeUnmount(parent, () => child.unmount());
+    } else if (child instanceof Observable) {
+      handleRenderingObservableElement(child, parent);
+    } else if (child instanceof Component) {
+      child.mount(parent);
+      mountNode(parent, child.ref);
+      observeNodeUnmount(parent, () => child.unmount());
+    } else if (child instanceof Conditional) {
+      child.mount(parent, mountNode);
+      observeNodeUnmount(parent, () => child.unmount());
+    } else if (child instanceof Element) {
+      mountNode(parent, child);
+    } else if (child == null) {
+      // do nothing
+    } else if (Array.isArray(child)) {
+      renderChildren(parent, child, indexOffset + childIndex);
+    } else if (typeof child === "function") {
+      if (prevChild) {
+        child(prevChild);
+      } else mountNode(parent, child(prevChild));
+    }
+    else {
+      console.debug("unhandled case", child);
+    }
+  });
+}
+
+function renderElement(_type, _properties, _children, previousNode) {
   const type = _type ?? "div";
   const { key, ...properties } = _properties ?? {};
+
+  let node = null;
+
+  if (previousNode) {
+    const previousTag = previousNode.tagName.toLowerCase()
+    if (type === "input" && previousNode.type !== properties.type) {
+      node = previousNode;
+    } else if(type === previousTag) {
+      node = previousNode;
+    } else {
+      node = document.createElement(type, properties);
+    }
+  } else {
+    node = document.createElement(type, properties);
+  }
+
   const children = _children ?? [];
-
-  const node = document.createElement(type, properties);
-
 
   // apply properties
   applyProperties(node, properties);
 
-  let childrenArr = Array.isArray(children) ? children : [children]; // flattenChildren(children);
-
-  // append children
-  if (childrenArr && childrenArr.length)
-    childrenArr.forEach((child, childIndex) => {
-      if (typeof child === ("string" || "number")) {
-        mountNode(node, new Text(child));
-      } else if (child instanceof ObservableArray) {
-        child.mount(node, mountNode, renderElement)
-        observeNodeUnmount(node, () => child.unmount());
-
-      } else if (child instanceof Observable) {
-        handleRenderingObservableElement(child, node);
-      } else if (child instanceof Component) {
-        child.mount(node);
-        mountNode(node, child.ref);
-        observeNodeUnmount(node, () => child.unmount());
-      } else if (child instanceof Conditional) {
-        child.mount(node, mountNode);
-        observeNodeUnmount(node, () => child.unmount());
-      } else if (child instanceof Element) {
-        mountNode(node, child);
-      } else if (child == null) {
-        // do nothing
-      } else if (Array.isArray(child)) {
-        child.forEach((c) => {
-          if (c instanceof Element) {
-            mountNode(node, c);
-          } else {
-            console.debug("unhandled case", c);
-          }
-        });
-      } else {
-        console.debug("unhandled case", child);
-      }
-    });
+  renderChildren(node, children);
 
   return node;
 }
@@ -206,4 +231,10 @@ function renderDOM(component, targetId = "root") {
   });
 }
 
-export { mountNode, applyProperties, renderElement, renderDOM };
+export {
+  mountNode,
+  applyProperties,
+  renderElement,
+  registerElement,
+  renderDOM,
+};

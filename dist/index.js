@@ -7,6 +7,7 @@ import {
   mountNode,
   applyProperties,
   renderElement,
+  registerElement,
   renderDOM,
 } from "./DOM/DOM";
 import Component from "./entities/Component";
@@ -43,6 +44,7 @@ const PlaceholderJs = {
   mountNode,
   applyProperties,
   renderElement,
+  registerElement,
   renderDOM,
 };
 
@@ -60,5 +62,6 @@ export {
   mountNode,
   applyProperties,
   renderElement,
+  registerElement,
   renderDOM,
 };

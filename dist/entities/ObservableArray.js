@@ -1,5 +1,6 @@
 import { insertChildAtIndex } from "../DOM/utils";
 import Observable from "./Observable";
+import core from "../core";
 
 const placeholderKey = Symbol("placeholder");
 
@@ -21,7 +22,7 @@ export default class ObservableArray {
   subscription = null;
 
   constructor(data, options, renderFn) {
-    const { getKey, invalidateFn} = options || {}
+    const { getKey, invalidateFn } = options || {};
     if (!data) throw new Error("No obserable provided!");
     if (data instanceof Observable === false)
       throw new Error("Data isn't an observable!");
@@ -58,7 +59,7 @@ export default class ObservableArray {
     this.data = null;
   }
 
-  getChildren(renderElement) {
+  getChildren(parent, renderElement) {
     let didChange = false;
     const newKeys = [];
     const { children: prevChildren, keys: prevKeys } = this;
@@ -83,13 +84,17 @@ export default class ObservableArray {
           this.data[index] !== prevData[index]
         ) {
           didChange = true;
-          return this.renderFn(row, index);
+
+          const node = this.renderFn(row, index);
+          return typeof node === "function" ? node(prevChildren[index]) : node;
         } else {
           return prevChildren[index];
         }
       } else {
         didChange = true;
-        return this.renderFn(row, index);
+
+        const node = this.renderFn(row, index);
+        return typeof node === "function" ? node(prevChildren[index]) : node;
       }
     });
 
@@ -115,7 +120,7 @@ export default class ObservableArray {
 
   renderChildren(parent, mountNode, renderElement) {
     const prevChildren = this.children;
-    const newChildren = this.getChildren(renderElement);
+    const newChildren = this.getChildren(parent, renderElement);
     if (newChildren === prevChildren) return;
 
     let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);

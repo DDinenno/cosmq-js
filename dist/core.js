@@ -11,7 +11,6 @@ class Core {
   observables = {};
 
   events = new EventEmitter([]);
-
   getComponentId() {
     this.currentId = this.currentId + 1;
     return this.currentId;
@@ -37,15 +36,14 @@ class Core {
 
     this.#components[component.id] = component;
     this.#registeringComponents = this.#registeringComponents.concat(component);
-
-
+    
+    
     component.events.on("render", () => {
       this.#registeringComponents = this.#registeringComponents.filter(
         (c) => c.id !== component.id
       );
-    })
+    });
 
-    component.events.on("mount", () => { });
 
     component.events.onOnce("unmount", () => {
       delete this.#components[component.id];
@@ -53,7 +51,6 @@ class Core {
 
     return component;
   }
-
 
   registerObservable(instance) {
     const component = this.getComponentContext();
@@ -79,7 +76,5 @@ class Core {
     return component;
   }
 }
-
-
 
 export default new Core();
