@@ -31,7 +31,7 @@ const evalObservable = (arg) => {
 
 const getPropValue = prop => prop instanceof Observable ? prop.value : prop;
 
-const PlaceholderJs = {
+const Cosmq = {
   observe,
   observableArray,
   compute,
@@ -48,7 +48,7 @@ const PlaceholderJs = {
   renderDOM,
 };
 
-export default PlaceholderJs;
+export default Cosmq;
 export {
   observe,
   observableArray,
