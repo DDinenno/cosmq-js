@@ -8,9 +8,8 @@ class Core {
 
   #components = {};
 
-  observables = {};
-
   events = new EventEmitter([]);
+  
   getComponentId() {
     this.currentId = this.currentId + 1;
     return this.currentId;

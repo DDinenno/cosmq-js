@@ -38,6 +38,10 @@ class Component extends BaseMountableEntity {
 
     render(componentFn, properties) {
         this.ref = componentFn(properties)
+
+        if(typeof this.ref === "function")
+            this.ref = this.ref()
+
         this.events.dispatch("render")
     }
 

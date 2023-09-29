@@ -6,7 +6,6 @@ import EventEmitter from "../events/EventEmitter";
 
 export const eventEmitter = new EventEmitter(["unmount"]);
 
-
 const observer = new MutationObserver((mutationList) => {
   for (const mutation of mutationList) {
     if (mutation.type === "childList" && mutation.removedNodes.length) {
@@ -21,7 +20,7 @@ const observer = new MutationObserver((mutationList) => {
   }
 });
 
-observer.observe(document,  { childList: true, subtree: true });
+observer.observe(document, { childList: true, subtree: true });
 
 function mountNode(parent, newNode, oldNode = null) {
   if (!parent) {
@@ -53,7 +52,10 @@ function applyStyle(node, obj) {
     const value =
       typeof _value === ("string" || "number") ? String(_value) : _value;
 
-    if (node.style[key] === value || (value == null && node.style[key] === "")) {
+    if (
+      node.style[key] === value ||
+      (value == null && node.style[key] === "")
+    ) {
       return;
     }
 
@@ -109,39 +111,39 @@ function applyProperties(node, properties) {
 }
 
 function handleRenderingObservableElement(child, parent) {
-    if (parent.localName === "input") {
+  if (parent.localName === "input") {
+    applyProperties(parent, { value: child.value });
+
+    const unsub = child.listen(() => {
       applyProperties(parent, { value: child.value });
+    });
+    observeNodeUnmount(parent, unsub);
+  } else {
+    let currentRef =
+      child.value instanceof Element ? child.value : new Text(child.value);
+    mountNode(parent, currentRef);
 
-      const unsub = child.listen(() => {
-        applyProperties(parent, { value: child.value });
-      });
-      observeNodeUnmount(parent, unsub);
-    } else {
-      let currentRef =
-        child.value instanceof Element ? child.value : new Text(child.value);
-      mountNode(parent, currentRef);
+    const unsub = child.listen(() => {
+      let newRef = currentRef;
 
-      const unsub = child.listen(() => {
-        let newRef = currentRef;
-
-        if (child.value instanceof Element) {
-          newRef = child.value;
-          mountNode(parent, newRef, currentRef);
-        } else if (typeof child.value === ("string" || "number")) {
-          if (currentRef instanceof Text) {
-            currentRef.data = child.value;
-          } else {
-            newRef = new Text(child.value);
-            mountNode(parent, newRef, currentRef);
-          }
+      if (child.value instanceof Element) {
+        newRef = child.value;
+        mountNode(parent, newRef, currentRef);
+      } else if (typeof child.value === ("string" || "number")) {
+        if (currentRef instanceof Text) {
+          currentRef.data = child.value;
         } else {
-          console.debug("Unhandled case", child.value);
+          newRef = new Text(child.value);
+          mountNode(parent, newRef, currentRef);
         }
+      } else {
+        console.debug("Unhandled case", child.value);
+      }
 
-        currentRef = newRef;
-      });
-      observeNodeUnmount(parent, unsub);
-    }
+      currentRef = newRef;
+    });
+    observeNodeUnmount(parent, unsub);
+  }
 }
 
 function registerElement(type, properties, children) {
@@ -149,16 +151,14 @@ function registerElement(type, properties, children) {
     renderElement(type, properties, children, previousNode);
 }
 
-function renderChildren(parent, children, indexOffset = 0) {
+function renderChildren(parent, children) {
   let childrenArr = Array.isArray(children) ? children : [children];
 
   // append children
-  childrenArr.forEach((child, i) => {
-    const childIndex = i + indexOffset;
-
+  children.flat().forEach((child, childIndex) => {
     const prevChild = parent.childNodes[childIndex];
 
-    if (typeof child === ("string" || "number")) {
+    if (typeof child === ("string" || "number" || "boolean")) {
       if (prevChild instanceof Text) {
         if (prevChild.data !== String(child)) {
           prevChild.data = child;
@@ -174,20 +174,22 @@ function renderChildren(parent, children, indexOffset = 0) {
       mountNode(parent, child.ref);
       observeNodeUnmount(parent, () => child.unmount());
     } else if (child instanceof Conditional) {
-      child.mount(parent, mountNode);
+      child.mount(parent, mountNode, () => renderElement("span", { hidden: true }));
       observeNodeUnmount(parent, () => child.unmount());
     } else if (child instanceof Element) {
       mountNode(parent, child);
     } else if (child == null) {
-      // do nothing
-    } else if (Array.isArray(child)) {
-      renderChildren(parent, child, indexOffset + childIndex);
+      // render hidden element as a placeholder
+      const node = renderElement("span", { hidden: true }, []);
+      mountNode(parent, node);
+   
     } else if (typeof child === "function") {
       if (prevChild) {
         child(prevChild);
-      } else mountNode(parent, child(prevChild));
-    }
-    else {
+      } else {
+        mountNode(parent, child());
+      }
+    } else {
       console.debug("unhandled case", child);
     }
   });
@@ -199,16 +201,18 @@ function renderElement(_type, _properties, _children, previousNode) {
 
   let node = null;
 
-  if (previousNode) {
-    const previousTag = previousNode.tagName.toLowerCase()
-    if (type === "input" && previousNode.type !== properties.type) {
-      node = previousNode;
-    } else if(type === previousTag) {
-      node = previousNode;
+  if (previousNode && type === previousNode.tagName.toLowerCase()) {
+    if (type === "input") {
+      if (previousNode.type === properties.type) {
+        node = previousNode;
+      }
     } else {
-      node = document.createElement(type, properties);
+      node = previousNode;
     }
-  } else {
+    
+  }
+
+  if (node == null) {
     node = document.createElement(type, properties);
   }
 

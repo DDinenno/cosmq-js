@@ -59,24 +59,25 @@ class Conditional extends BaseMountableEntity {
     return config;
   }
 
-  mount(parent, mountNode) {
-    const node = this.getConfig()
-    let config = typeof node === "function" ? node() : node
-    let domRef = config
+  mount(parent, mountNode, getPlaceholderNode) {
+    const node = this.getConfig();
+    let domRef = typeof node === "function" ? node() : node;
+    if (!domRef) domRef = getPlaceholderNode();
 
     const index = parent.childNodes.length;
 
     const unsub = this.events.on("change", (newConfig) => {
-      const currentConfig = config
+      const currentConfig = domRef;
 
       if (newConfig == null) {
-        config = null;
         if (domRef) domRef.remove();
-        domRef = null;
+        domRef = getPlaceholderNode();
       } else {
         const prevDomRef = domRef;
-        config = typeof newConfig === "function" ? newConfig() : newConfig
-        domRef = config;
+        domRef = typeof newConfig === "function" ? newConfig() : newConfig;
+
+        if (!domRef) domRef = getPlaceholderNode();
+
         if (currentConfig == null) {
           insertChildAtIndex(parent, domRef, index);
         } else {

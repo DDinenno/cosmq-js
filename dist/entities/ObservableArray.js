@@ -59,7 +59,7 @@ export default class ObservableArray {
     this.data = null;
   }
 
-  getChildren(parent, renderElement) {
+  getChanges(parent, renderElement) {
     let didChange = false;
     const newKeys = [];
     const { children: prevChildren, keys: prevKeys } = this;
@@ -91,7 +91,13 @@ export default class ObservableArray {
           return prevChildren[index];
         }
       } else {
-        didChange = true;
+        if (prevKeys.includes(key)) {
+          const foundIndex = prevData.findIndex((r) => this.getKey(r) === key);
+          if (foundIndex !== -1) {
+            didChange = true;
+            return prevChildren[foundIndex];
+          }
+        }
 
         const node = this.renderFn(row, index);
         return typeof node === "function" ? node(prevChildren[index]) : node;
@@ -115,12 +121,30 @@ export default class ObservableArray {
 
     this.keys = newKeys;
 
-    return didChange ? newChildren : prevChildren;
+    const updatedChildren = didChange ? newChildren : prevChildren;
+    const deletedChildren = [];
+
+    prevKeys.forEach((key, index) => {
+      if (!newKeys.includes(key)) {
+        deletedChildren.push(prevChildren[index]);
+      }
+    });
+
+    return { newChildren: updatedChildren, deletedChildren };
   }
 
   renderChildren(parent, mountNode, renderElement) {
+    const { newChildren, deletedChildren } = this.getChanges(parent, renderElement);
+
+
+    for (let i = 0; i < deletedChildren.length; i++) {
+      const child = deletedChildren[i];
+      child.remove()
+    }
+
+    this.children = this.children.filter(c => !deletedChildren.includes(c))
+
     const prevChildren = this.children;
-    const newChildren = this.getChildren(parent, renderElement);
     if (newChildren === prevChildren) return;
 
     let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);
@@ -128,12 +152,12 @@ export default class ObservableArray {
 
     let frag = null;
     const frags = [];
-
     newChildren.forEach((child, index) => {
       if (prevChildren[index] === child) {
         frag = null;
         return;
       }
+
 
       if (prevChildren[index]) {
         frag = null;
@@ -151,16 +175,11 @@ export default class ObservableArray {
       }
     });
 
+
     requestAnimationFrame(() => {
       frags.forEach((frag) => {
         insertChildAtIndex(parent, frag.node, frag.index);
       });
-
-      if (newChildren.length < prevChildren.length) {
-        for (let i = newChildren.length; i < prevChildren.length; i++) {
-          parent.removeChild(prevChildren[i]);
-        }
-      }
     });
 
     this.children = newChildren;
