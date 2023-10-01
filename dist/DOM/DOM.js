@@ -155,7 +155,7 @@ function renderChildren(parent, children) {
   let childrenArr = Array.isArray(children) ? children : [children];
 
   // append children
-  children.flat().forEach((child, childIndex) => {
+  childrenArr.flat().forEach((child, childIndex) => {
     const prevChild = parent.childNodes[childIndex];
 
     if (typeof child === ("string" || "number" || "boolean")) {
@@ -171,10 +171,20 @@ function renderChildren(parent, children) {
       handleRenderingObservableElement(child, parent);
     } else if (child instanceof Component) {
       child.mount(parent);
-      mountNode(parent, child.ref);
+      
+      
+      if(child.ref instanceof Element) {
+        mountNode(parent, child.ref);
+      } else {
+        // this is to render children that are fed through a component
+        renderChildren(parent, child.ref)
+      }
+
       observeNodeUnmount(parent, () => child.unmount());
     } else if (child instanceof Conditional) {
-      child.mount(parent, mountNode, () => renderElement("span", { hidden: true }));
+      child.mount(parent, mountNode, () =>
+        renderElement("span", { hidden: true })
+      );
       observeNodeUnmount(parent, () => child.unmount());
     } else if (child instanceof Element) {
       mountNode(parent, child);
@@ -182,7 +192,6 @@ function renderChildren(parent, children) {
       // render hidden element as a placeholder
       const node = renderElement("span", { hidden: true }, []);
       mountNode(parent, node);
-   
     } else if (typeof child === "function") {
       if (prevChild) {
         child(prevChild);
@@ -209,7 +218,6 @@ function renderElement(_type, _properties, _children, previousNode) {
     } else {
       node = previousNode;
     }
-    
   }
 
   if (node == null) {
