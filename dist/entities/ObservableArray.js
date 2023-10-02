@@ -134,15 +134,17 @@ export default class ObservableArray {
   }
 
   renderChildren(parent, mountNode, renderElement) {
-    const { newChildren, deletedChildren } = this.getChanges(parent, renderElement);
-
+    const { newChildren, deletedChildren } = this.getChanges(
+      parent,
+      renderElement
+    );
 
     for (let i = 0; i < deletedChildren.length; i++) {
       const child = deletedChildren[i];
-      child.remove()
+      child.remove();
     }
 
-    this.children = this.children.filter(c => !deletedChildren.includes(c))
+    this.children = this.children.filter((c) => !deletedChildren.includes(c));
 
     const prevChildren = this.children;
     if (newChildren === prevChildren) return;
@@ -157,7 +159,6 @@ export default class ObservableArray {
         frag = null;
         return;
       }
-
 
       if (prevChildren[index]) {
         frag = null;
@@ -174,7 +175,6 @@ export default class ObservableArray {
         mountNode(frag.node, child);
       }
     });
-
 
     requestAnimationFrame(() => {
       frags.forEach((frag) => {
