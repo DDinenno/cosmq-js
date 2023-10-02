@@ -172,12 +172,11 @@ function renderChildren(parent, children) {
     } else if (child instanceof Component) {
       child.mount(parent);
       
-      
-      if(child.ref instanceof Element) {
+      if (child.ref instanceof Element) {
         mountNode(parent, child.ref);
       } else {
         // this is to render children that are fed through a component
-        renderChildren(parent, child.ref)
+        renderChildren(parent, child.ref);
       }
 
       observeNodeUnmount(parent, () => child.unmount());
