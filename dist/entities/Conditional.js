@@ -52,7 +52,8 @@ class Conditional extends BaseMountableEntity {
 
     if (this.condition !== -1) {
       config = this.conditions[this.condition].body();
-    }
+    } 
+
 
     this.events.dispatch("render", config);
 
@@ -67,18 +68,16 @@ class Conditional extends BaseMountableEntity {
     const index = parent.childNodes.length;
 
     const unsub = this.events.on("change", (newConfig) => {
-      const currentConfig = domRef;
+      const prevDomRef = domRef;
 
       if (newConfig == null) {
-        if (domRef) domRef.remove();
         domRef = getPlaceholderNode();
+        mountNode(parent, domRef, prevDomRef);
       } else {
-        const prevDomRef = domRef;
         domRef = typeof newConfig === "function" ? newConfig() : newConfig;
-
         if (!domRef) domRef = getPlaceholderNode();
-
-        if (currentConfig == null) {
+     
+        if (prevDomRef == null) {
           insertChildAtIndex(parent, domRef, index);
         } else {
           mountNode(parent, domRef, prevDomRef);
