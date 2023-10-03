@@ -2,6 +2,7 @@
 
 A lightweight, zero dependency, no Virtual DOM, **truely** reactive js framework.
 
+> **WARNING** -- This is experimental software and isn't in a state to be used in production.
 
 ## Getting Started
 
