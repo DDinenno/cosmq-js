@@ -23,4 +23,4 @@ babel.config.json
 
 ## Example Project
 
-You can view example project here: [Example Repo](https://github.com/DDinenno/cosmq-js-example)
+You can view example project here: <a href="https://github.com/DDinenno/cosmq-js-example">Example Repo</a>
