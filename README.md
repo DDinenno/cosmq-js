@@ -10,14 +10,14 @@ Install
 >  npm i cosmq-js
 
 Install babel preset
-> npm i babel-preset-cosmq-js
+> npm i babel-preset-cosmq
 
-Add `babel-preset-cosmq-js` to your babel config 
+Add `babel-preset-cosmq` to your babel config 
 
 babel.config.json
 ```
 {
-  "preset": ["babel-preset-cosmq-js"]
+  "preset": ["babel-preset-cosmq"]
 }
 ```
 
