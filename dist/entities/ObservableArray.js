@@ -152,35 +152,10 @@ export default class ObservableArray {
     let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);
     if (startIndex === -1) startIndex = parent.childNodes.length;
 
-    let frag = null;
-    const frags = [];
     newChildren.forEach((child, index) => {
-      if (prevChildren[index] === child) {
-        frag = null;
-        return;
-      }
+      insertChildAtIndex(parent, child, index);
+    })
 
-      if (prevChildren[index]) {
-        frag = null;
-        mountNode(parent, child, prevChildren[index]);
-      } else {
-        if (frag == null) {
-          frag = {
-            node: document.createDocumentFragment(),
-            index: startIndex + index,
-          };
-          frags.push(frag);
-        }
-
-        mountNode(frag.node, child);
-      }
-    });
-
-    requestAnimationFrame(() => {
-      frags.forEach((frag) => {
-        insertChildAtIndex(parent, frag.node, frag.index);
-      });
-    });
 
     this.children = newChildren;
   }
