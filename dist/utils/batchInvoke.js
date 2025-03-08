@@ -1,11 +1,11 @@
-const waitTime = 50;
+const waitTime = 5;
 
 const scope = {}
 let timer;
 
 export default function batchInvoke(scopeId, id, func) {
-  if(scopeId in scope === false) {
-    scope[scopeId] = { functions: []}
+  if (scopeId in scope === false) {
+    scope[scopeId] = { functions: [] }
   }
 
 
