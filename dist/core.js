@@ -8,8 +8,10 @@ class Core {
 
   #components = {};
 
+  #globalObservables = []
+
   events = new EventEmitter([]);
-  
+
   getComponentId() {
     this.currentId = this.currentId + 1;
     return this.currentId;
@@ -35,8 +37,8 @@ class Core {
 
     this.#components[component.id] = component;
     this.#registeringComponents = this.#registeringComponents.concat(component);
-    
-    
+
+
     component.events.on("render", () => {
       this.#registeringComponents = this.#registeringComponents.filter(
         (c) => c.id !== component.id
@@ -51,17 +53,32 @@ class Core {
     return component;
   }
 
-  registerObservable(instance) {
-    const component = this.getComponentContext();
-    if (component == null) {
-      throw new Error(
-        "initializing observable after component was registered!"
-      );
+  observableRender(component, cb) {
+    this.#registeringComponents = this.#registeringComponents.concat(component);
+
+    cb()
+
+    this.#registeringComponents = this.#registeringComponents.filter(
+      (c) => c.id !== component.id
+    );
+
+  }
+
+  registerObservable(instance, global = false) {
+    if (global) {
+      this.#globalObservables.push(instance)
+    } else {
+      const component = this.getComponentContext();
+      if (component == null) {
+        throw new Error(
+          "initializing observable after component was registered!"
+        );
+      }
+
+      component.addObservable(instance);
+
+      return component;
     }
-
-    component.addObservable(instance);
-
-    return component;
   }
 
   registerEffect(instance) {
