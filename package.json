@@ -1,6 +1,6 @@
 {
   "name": "cosmq-js",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "dist/index.js",
   "scripts": {
     "start": "babel ./src/index.js --watch --out-file ./index.js  ",
