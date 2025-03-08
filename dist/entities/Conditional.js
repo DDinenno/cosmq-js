@@ -2,6 +2,7 @@ import debounce from "../utils/debounce";
 import BaseMountableEntity from "./BaseMountableEntity";
 import Observable from "./Observable";
 import { insertChildAtIndex } from "../DOM/utils";
+import core from "../core";
 
 class Conditional extends BaseMountableEntity {
   deps = [];
@@ -10,9 +11,12 @@ class Conditional extends BaseMountableEntity {
 
   condition = undefined;
 
+  origin = null;
+
   constructor(deps, conditions) {
     super(["beforeChange", "change", "render"]);
 
+    this.origin = core.registerObservable(this);
     this.conditions = conditions;
     this.deps = deps;
     this.condition = this.evaluate();
@@ -23,7 +27,9 @@ class Conditional extends BaseMountableEntity {
 
       if (this.condition !== newCondition) {
         this.condition = newCondition;
-        this.events.dispatch("change", this.getConfig());
+        core.observableRender(this.origin, () => {
+          this.events.dispatch("change", this.getConfig());
+        });
       }
     });
 
@@ -43,7 +49,7 @@ class Conditional extends BaseMountableEntity {
 
   evaluate() {
     return this.conditions.findIndex(
-      ({ __condition__: condition }) => !!condition()
+      ({ __condition__: condition }) => !!condition(),
     );
   }
 
@@ -52,6 +58,10 @@ class Conditional extends BaseMountableEntity {
 
     if (this.condition !== -1) {
       config = this.conditions[this.condition].body();
+
+      if (typeof config === "string") {
+        config = new Text(config);
+      }
     }
 
     this.events.dispatch("render", config);
@@ -72,7 +82,8 @@ class Conditional extends BaseMountableEntity {
       if (newConfig == null) {
         domRef = getPlaceholderNode();
       } else {
-        domRef = typeof newConfig === "function" ? newConfig() : newConfig;
+        domRef =
+          typeof newConfig === "function" ? newConfig(prevDomRef) : newConfig;
         if (!domRef) domRef = getPlaceholderNode();
       }
 
