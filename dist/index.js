@@ -13,7 +13,9 @@ import {
 import Component from "./entities/Component";
 import ObservableArray from "./entities/ObservableArray";
 
-const observe = (initialValue) => new Observable(initialValue);
+const observe = (initialValue, global = false) => {
+  return initialValue instanceof Observable ? initialValue : new Observable(initialValue, global)
+}
 const observableArray = (...args) => new ObservableArray(...args);
 const compute = (body, deps = []) => new Computed(body, deps);
 const effect = (body, deps = []) => new Effect(body, deps);
