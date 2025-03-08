@@ -21,7 +21,11 @@ export default class ObservableArray {
 
   subscription = null;
 
+  origin = null
+
   constructor(data, options, renderFn) {
+    this.origin = core.registerObservable(this);
+
     const { getKey, invalidateFn } = options || {};
     if (!data) throw new Error("No obserable provided!");
     if (data instanceof Observable === false)
@@ -43,7 +47,9 @@ export default class ObservableArray {
     this.renderChildren(parent, mountNode, renderElement);
 
     this.unsubscribe = this.obs.listen(() => {
-      this.renderChildren(parent, mountNode, renderElement);
+      core.observableRender(this.origin, () => {
+        this.renderChildren(parent, mountNode, renderElement);
+      })
     });
   }
 
@@ -57,6 +63,7 @@ export default class ObservableArray {
     this.keys = null;
     this.invalidate = null;
     this.data = null;
+   this.origin = null
   }
 
   getChanges(parent, renderElement) {
@@ -91,13 +98,19 @@ export default class ObservableArray {
           return prevChildren[index];
         }
       } else {
-        if (prevKeys.includes(key)) {
+        const invalidate = this.invalidate &&
+          this.invalidate(this.data[index], prevData[index])
+
+
+        if (prevKeys.includes(key) && !invalidate) {
           const foundIndex = prevData.findIndex((r) => this.getKey(r) === key);
           if (foundIndex !== -1) {
             didChange = true;
             return prevChildren[foundIndex];
           }
         }
+
+        didChange = true;
 
         const node = this.renderFn(row, index);
         return typeof node === "function" ? node(prevChildren[index]) : node;
