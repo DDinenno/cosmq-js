@@ -21,7 +21,7 @@ export default class ObservableArray {
 
   subscription = null;
 
-  origin = null
+  origin = null;
 
   constructor(data, options, renderFn) {
     this.origin = core.registerObservable(this);
@@ -49,7 +49,7 @@ export default class ObservableArray {
     this.unsubscribe = this.obs.listen(() => {
       core.observableRender(this.origin, () => {
         this.renderChildren(parent, mountNode, renderElement);
-      })
+      });
     });
   }
 
@@ -63,7 +63,7 @@ export default class ObservableArray {
     this.keys = null;
     this.invalidate = null;
     this.data = null;
-   this.origin = null
+    this.origin = null;
   }
 
   getChanges(parent, renderElement) {
@@ -79,17 +79,18 @@ export default class ObservableArray {
       if (key == null) throw new Error("Array items must have a key");
       if (newKeys.includes(key))
         throw new Error(
-          "Found a duplicate key in child array! Keys must be unique."
+          "Found a duplicate key in child array! Keys must be unique.",
         );
 
       newKeys.push(key);
 
       if (prevKeys[index] === key) {
         if (
-          (this.invalidate &&
-            this.invalidate(this.data[index], prevData[index])) ||
-          this.data[index] !== prevData[index]
+          this.invalidate &&
+          this.invalidate(this.data[index], prevData[index])
+          //|| this.data[index] !== prevData[index]
         ) {
+          console.log(this.data[index], prevData[index]);
           didChange = true;
 
           const node = this.renderFn(row, index);
@@ -98,9 +99,8 @@ export default class ObservableArray {
           return prevChildren[index];
         }
       } else {
-        const invalidate = this.invalidate &&
-          this.invalidate(this.data[index], prevData[index])
-
+        const invalidate =
+          this.invalidate && this.invalidate(this.data[index], prevData[index]);
 
         if (prevKeys.includes(key) && !invalidate) {
           const foundIndex = prevData.findIndex((r) => this.getKey(r) === key);
@@ -149,7 +149,7 @@ export default class ObservableArray {
   renderChildren(parent, mountNode, renderElement) {
     const { newChildren, deletedChildren } = this.getChanges(
       parent,
-      renderElement
+      renderElement,
     );
 
     for (let i = 0; i < deletedChildren.length; i++) {
@@ -162,13 +162,10 @@ export default class ObservableArray {
     const prevChildren = this.children;
     if (newChildren === prevChildren) return;
 
-    let startIndex = [...parent.childNodes].indexOf(prevChildren[0]);
-    if (startIndex === -1) startIndex = parent.childNodes.length;
-
     newChildren.forEach((child, index) => {
+      if (prevChildren[index] === child) return;
       insertChildAtIndex(parent, child, index);
-    })
-
+    });
 
     this.children = newChildren;
   }
