@@ -1,20 +1,19 @@
 const waitTime = 5;
 
-const scope = {}
-let timer;
+const scope = {};
 
 export default function batchInvoke(scopeId, id, func) {
   if (scopeId in scope === false) {
-    scope[scopeId] = { functions: [] }
+    scope[scopeId] = { functions: {} };
   }
 
+  const functions = scope[scopeId].functions;
 
-  const functions = scope[scopeId].functions
   if (Object.keys(functions).length === 0) {
-    timer = setTimeout(() => {
+    scope[scopeId].timer = setTimeout(() => {
       const list = Object.values(functions);
       list.forEach((fn) => fn());
-      timer = null;
+      scope[scopeId].timer = null;
       scope[scopeId].functions = {};
     }, waitTime);
   }

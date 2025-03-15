@@ -27,13 +27,14 @@ class Observable {
   }
 
   set(newValue) {
-    // this.value = newValue;
-    // batchInvoke("observable", this.id, () => {
     if (this.value !== newValue) {
       this.value = newValue;
-      [...this.listeners].forEach((fn) => fn(newValue));
+
+      batchInvoke("observable", this.id, () => {
+        this.value = newValue;
+        [...this.listeners].forEach((fn) => fn(newValue));
+      });
     }
-    // });
   }
 
   listen(listener) {
